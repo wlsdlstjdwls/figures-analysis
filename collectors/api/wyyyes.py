@@ -51,6 +51,13 @@ def collect(categories=None):
     now = datetime.datetime.now().isoformat(timespec="seconds")
     total_sold = total_active = 0
 
+    # 이미 저장된 낙찰 건(확정가) — 자주 폴링해도 중복 누적 안 하도록 스킵용
+    sold_seen = {
+        r[0] for r in conn.execute(
+            "SELECT source_item_id FROM product_listing WHERE source='wyyyes' AND is_sold=1"
+        ).fetchall()
+    }
+
     for cat in categories:
         # ── 1) 낙찰 피드 (실거래) ──────────────────────────────
         try:
@@ -58,19 +65,25 @@ def collect(categories=None):
         except Exception as e:
             print(f"[wyyyes] history '{cat}' 실패: {e}")
             feed = []
+        new_sold = 0
         for it in feed:
+            sid = it.get("auctionId") or it.get("_id")
+            if sid in sold_seen:        # 낙찰가는 확정값 → 1건만 보관
+                continue
+            sold_seen.add(sid)
             name = it.get("name", "")
             f = extract_fields(name)
             price = it.get("amountPaid")
+            new_sold += 1
             conn.execute(
                 """INSERT OR IGNORE INTO product_listing
                    (source, source_item_id, title_raw, character, genre, maker, line,
                     scale, condition, price, currency, price_krw, is_sold, is_noise,
-                    mall_name, category, url, query, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    mall_name, category, url, image_url, query, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     "wyyyes",
-                    it.get("auctionId") or it.get("_id"),
+                    sid,
                     f["title"], f["character"], f["genre"], f["maker"], f["line"],
                     f["scale"], f["condition"],
                     float(price) if price not in (None, "") else None,
@@ -81,6 +94,7 @@ def collect(categories=None):
                     it.get("nickname"),     # 판매자(매장)
                     f"wyyyes:{cat}:sold",
                     it.get("redirectUriWeb"),
+                    it.get("thumbnail"),
                     f"{cat}-sold",
                     now,
                 ),
@@ -108,8 +122,8 @@ def collect(categories=None):
                 """INSERT OR IGNORE INTO product_listing
                    (source, source_item_id, title_raw, character, genre, maker, line,
                     scale, condition, price, currency, price_krw, is_sold, is_noise,
-                    mall_name, category, url, query, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    mall_name, category, url, image_url, query, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     "wyyyes",
                     it.get("_id"),
@@ -123,6 +137,7 @@ def collect(categories=None):
                     seller,
                     f"wyyyes:{cat}:active",
                     f"https://wyyyes.com/timeAuction/{it.get('_id')}",
+                    stock.get("thumbnail"),
                     f"{cat}-active",
                     now,
                 ),
@@ -130,7 +145,7 @@ def collect(categories=None):
             total_active += 1
         conn.commit()
         time.sleep(REQUEST_DELAY)
-        print(f"[wyyyes] '{cat}' -> 낙찰 {len(feed)} / 진행중 {len(active)}")
+        print(f"[wyyyes] '{cat}' -> 낙찰 신규 {new_sold}/{len(feed)} / 진행중 {len(active)}")
 
     conn.close()
     print(f"[wyyyes] done. sold {total_sold}, active {total_active} @ {now}")

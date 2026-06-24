@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS product_listing (
     mall_name       TEXT,                   -- 판매처
     category        TEXT,
     url             TEXT,
+    image_url       TEXT,                   -- 썸네일 이미지
     query           TEXT,                   -- 어떤 검색어로 수집됐나
     collected_at    TEXT NOT NULL,          -- ISO8601
     UNIQUE(source, source_item_id, collected_at)

@@ -44,6 +44,10 @@ def init_db():
     conn = get_conn()
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         conn.executescript(f.read())
+    # 기존 DB 마이그레이션 (CREATE TABLE IF NOT EXISTS는 컬럼 추가 안 함)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(product_listing)").fetchall()}
+    if "image_url" not in cols:
+        conn.execute("ALTER TABLE product_listing ADD COLUMN image_url TEXT")
     conn.commit()
     conn.close()
     print(f"[db] initialized at {DB_PATH}")

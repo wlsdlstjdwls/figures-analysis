@@ -115,8 +115,8 @@ def collect(queries=None):
                     """INSERT OR IGNORE INTO product_listing
                        (source, source_item_id, title_raw, character, genre, maker, line,
                         scale, condition, price, currency, price_krw, is_sold, is_noise,
-                        mall_name, category, url, query, collected_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        mall_name, category, url, image_url, query, collected_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         "ebay",
                         it.get("itemId"),
@@ -135,6 +135,7 @@ def collect(queries=None):
                         (it.get("seller") or {}).get("username"),
                         category,
                         it.get("itemWebUrl"),
+                        (it.get("image") or {}).get("imageUrl"),
                         q,
                         now,
                     ),

@@ -80,8 +80,8 @@ def collect(queries=None):
                     """INSERT OR IGNORE INTO product_listing
                        (source, source_item_id, title_raw, character, genre, maker, line,
                         scale, condition, price, currency, price_krw, is_sold, is_noise,
-                        mall_name, category, url, query, collected_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        mall_name, category, url, image_url, query, collected_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         "naver",
                         it.get("productId"),
@@ -101,6 +101,7 @@ def collect(queries=None):
                         " > ".join(filter(None, [it.get("category1"), it.get("category2"),
                                                  it.get("category3"), it.get("category4")])),
                         it.get("link"),
+                        it.get("image"),
                         q,
                         now,
                     ),
