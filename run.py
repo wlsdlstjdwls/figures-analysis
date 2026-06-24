@@ -8,6 +8,13 @@
   python run.py bunjang   # 번개장터 수집 (국내 중고 호가)
   python run.py amiami    # 아미아미 수집 (일본 정가+발매일+바코드, Playwright)
   python run.py yahoo     # 야후옥션 재팬 (일본 중고 낙찰가=실거래 + 호가)
+  python run.py hlj       # HLJ(HobbyLink Japan) 수집 (해외 새제품 정가, requests)
+  python run.py bbts      # BBTS(BigBadToyStore) 수집 (미국 새제품 정가, Playwright)
+  python run.py suruga    # 스루가야 수집 (일본 중고 정찰가, FlareSolverr 경유)
+  python run.py rakuten   # 라쿠텐 이치바 수집 (일본 신품/중고 호가, 무료 API키 필요)
+  python run.py danawa    # 다나와 수집 (국내 가격비교 최저가 호가, requests)
+  python run.py hobbysearch # Hobby Search(1999.co.jp) 수집 (일본 새제품 정가, FlareSolverr)
+  python run.py entearth  # Entertainment Earth 수집 (미국 새제품 정가, FlareSolverr)
   python run.py analyze   # 분석 출력
   python run.py match     # 교차언어 상품 매칭 후보 덤프 (판정은 Claude Code가 대화로)
   python run.py group     # 상품그룹 매칭 (이관+자동블로킹+검수덤프+product_match 역생성)
@@ -17,7 +24,8 @@
   python run.py report    # 주간 마크다운 리포트 생성
   python run.py html      # HTML 대시보드 생성 (reports/dashboard.html)
   python run.py all       # fx -> collect -> analyze
-  python run.py daily     # fx -> collect -> report + html  (자동화용)
+  python run.py daily     # fx -> 호가/실거래(naver/wyyyes/bunjang/yahoo) -> report + html (매일 자동)
+  python run.py weekly    # fx -> 정가+스루가야(amiami/hlj/bbts/suruga) -> group -> premium/pricing -> html (주1회 자동, suruga는 FlareSolverr 필요)
 """
 import sys
 
@@ -49,6 +57,27 @@ def main():
     elif cmd == "yahoo":
         from collectors.scrape.yahoo_jp import collect
         collect()
+    elif cmd == "hlj":
+        from collectors.scrape.hlj import collect
+        collect()
+    elif cmd == "bbts":
+        from collectors.scrape.bbts import collect
+        collect()
+    elif cmd == "suruga":
+        from collectors.scrape.suruga import collect
+        collect()
+    elif cmd == "rakuten":
+        from collectors.api.rakuten import collect
+        collect()
+    elif cmd == "danawa":
+        from collectors.scrape.danawa import collect
+        collect()
+    elif cmd == "hobbysearch":
+        from collectors.scrape.hobbysearch import collect
+        collect()
+    elif cmd == "entearth":
+        from collectors.scrape.entearth import collect
+        collect()
     elif cmd == "analyze":
         from analysis.price import run
         run()
@@ -77,11 +106,14 @@ def main():
         from report.html_report import build
         build()
     elif cmd == "daily":
+        # 매일 변동(호가/실거래)만 — 가볍게. 정가(Playwright/CF)는 weekly로 분리.
         from storage.db import init_db
         from fx.rates import update_fx
         from collectors.api.naver import collect
         from collectors.api.wyyyes import collect as collect_wyyyes
         from collectors.api.bunjang import collect as collect_bunjang
+        from collectors.scrape.yahoo_jp import collect as collect_yahoo
+        from collectors.scrape.danawa import collect as collect_danawa
         from report.weekly import build
         from report.html_report import build as build_html
         init_db()
@@ -90,15 +122,49 @@ def main():
         except Exception as e:
             print(f"[fx] skip ({e})")
         collect()
-        try:
-            collect_wyyyes()
-        except Exception as e:
-            print(f"[wyyyes] skip ({e})")
-        try:
-            collect_bunjang()
-        except Exception as e:
-            print(f"[bunjang] skip ({e})")
+        for name, fn in (("wyyyes", collect_wyyyes), ("bunjang", collect_bunjang),
+                         ("yahoo", collect_yahoo), ("danawa", collect_danawa)):
+            try:
+                fn()
+            except Exception as e:
+                print(f"[{name}] skip ({e})")
         build()
+        build_html()
+    elif cmd == "weekly":
+        # 주1회 정가 소스(Playwright/CF 무거움) + 재그룹 + 분석 + HTML 재생성.
+        from storage.db import init_db
+        from fx.rates import update_fx
+        from collectors.scrape.amiami import collect as collect_amiami
+        from collectors.scrape.hlj import collect as collect_hlj
+        from collectors.scrape.bbts import collect as collect_bbts
+        from collectors.scrape.suruga import collect as collect_suruga
+        from collectors.scrape.hobbysearch import collect as collect_hs
+        from collectors.scrape.entearth import collect as collect_ee
+        from collectors.api.rakuten import collect as collect_rakuten
+        from report.html_report import build as build_html
+        init_db()
+        try:
+            update_fx()
+        except Exception as e:
+            print(f"[fx] skip ({e})")
+        for name, fn in (("amiami", collect_amiami), ("hlj", collect_hlj),
+                         ("bbts", collect_bbts), ("suruga", collect_suruga),
+                         ("hobbysearch", collect_hs), ("entearth", collect_ee),
+                         ("rakuten", collect_rakuten)):
+            try:
+                fn()
+            except Exception as e:
+                print(f"[{name}] skip ({e})")
+        try:
+            from normalize.grouping import run as run_group
+            run_group()
+        except Exception as e:
+            print(f"[group] skip ({e})")
+        for name, mod in (("premium", "analysis.premium"), ("pricing", "analysis.pricing")):
+            try:
+                __import__(mod, fromlist=["run"]).run()
+            except Exception as e:
+                print(f"[{name}] skip ({e})")
         build_html()
     elif cmd == "all":
         from storage.db import init_db

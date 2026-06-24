@@ -1,7 +1,95 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-24(3) · **반자동 상품그룹 매처 구축 세션: source 무관 상품그룹 일반화 + 자동 블로킹.** 매칭 30→**46건**(수동) + 자동 100건 그룹화.
+> 최종 업데이트: 2026-06-24(6) · **Hobby Search + Entertainment Earth 추가**(FlareSolverr 경유, 일본/미국 정가). 가동 12소스 + 라쿠텐 보류.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-24 #6) — Hobby Search + Entertainment Earth (FlareSolverr)
+
+### ⭐ 신규 소스 2종 (FlareSolverr 경유, suruga와 동일 CF 우회 인프라)
+- 정찰: HS·EE 둘 다 **전사 Cloudflare("Just a moment")** → 평범 requests 불가. FlareSolverr(`POST /v1 request.get`)로 CF 통과 확인(stillCF=False) 후 구현.
+- **Hobby Search**(`run.py hobbysearch`, `collectors/scrape/hobbysearch.py`): 일본 영문몰 새제품 **정가**(JPY). HLJ/amiami 보완.
+  - 검색 param=`searchkey`(stk 아님!) + `cat=figure`로 피규어 한정. 카드 `c-card`: `itemcode="(\d+)"`·`c-card__title`·`c-card__price-element>…JPY`·`c-card__maker`(=발매일)·img `/itbigNN/<code>.jpg`. ⚠️ SVG lottie 노이즈 → `_parse`가 `<svg>` 선제거.
+  - 결과: **263고유행**(532수집dedup) 전부 가격+환율. 특촬112·괴수81·기타68(넨도/플라모 캐릭터). condition new, is_sold 0. source_date=발매일 문자열. 영문 키워드(godzilla/ultraman/kamen rider/gridman/kaiju no.8…).
+- **Entertainment Earth**(`run.py entearth`, `collectors/scrape/entearth.py`): 미국 새제품 **정가**(USD). BBTS 보완.
+  - 검색 param=`query1`(query 아님!). 카드 `.product product-hover` 안 `<button class="add-to-cart" data-*>`에 구조화 데이터: **data-sku·data-price(USD)·data-name·data-company(메이커)·data-theme·data-character**. 매우 깔끔.
+  - 결과: **301고유행**(433수집dedup) 전부 가격. 괴수185·공룡65·특촬39. maker 잘 추출(Playmates/Hiya/Bandai Tamashii/Rokimoto). USD→price_krw fx보정. condition new, is_sold 0.
+- 배선: 각 단독 명령 + **weekly 편입**(amiami/hlj/bbts/suruga/**hobbysearch/entearth**/rakuten). FlareSolverr 없으면 헬스체크 후 중단(무해). 대시보드 SOURCE_KO/COLOR: hobbysearch(주황#ff8800)·entearth(보라#6a3d9a). `run.py html` 재생성 13,674건.
+- 🎯 다음: `run.py group` 재실행 시 자동블로킹 합류. ⚠️ HS 기타68 renormalize 대상.
+
+## 이번 세션 변경 (2026-06-24 #5b) — 다나와 추가 (라쿠텐 키 막혀 전환)
+
+### ⚠️ 라쿠텐 보류 — 일본 휴대폰 인증 장벽
+- 라쿠텐 Web Service applicationId 발급 = 楽天会員 가입 필요 → **일본 휴대폰(080…) 인증 필수, 한국번호 불가**. eBay처럼 단순 키발급이 아님.
+- 코드(`collectors/api/rakuten.py`)·배선·대시보드 등록은 **그대로 유지**(지인/일본번호/프록시 생기면 `.env RAKUTEN_APP_ID`만 넣으면 즉시 가동). weekly에서 키없으면 skip(무해).
+
+### ⭐ 신규 소스 다나와 (`run.py danawa`) — 국내 가격비교 최저가 호가(KRW)
+- `collectors/scrape/danawa.py`. **평범한 requests**(CF/인증 불필요, Hobby Search·Entertainment Earth는 전사 CF라 탈락 / 라쿠텐·이치바HTML은 Akamai차단).
+- **파싱**: `search.danawa.com/dsearch.php?k1=<kw>&module=goods` HTML → `<li class="prod_item" id="productItem<cmpny>_<prod>">` 단위 분할(`_ITEM_RE`). 이름 `prod_name`(<b>제거), 최저가 첫 `price_sect <strong>…원`, go_link_goods.php 링크, img. 이름 접두어 `[중고]`→condition used, `[해외]`=직구(new). is_sold=0(판매 호가). currency KRW(=price_krw).
+- **결과**: 602고유행(724수집·dedup), 전부 가격, 중고24. 장르 괴수271·특촬204·공룡14·기타106. 가격대 정상. CCP·카이요도·반다이 등 소프비 잘 잡힘.
+- 배선: `run.py danawa` 단독 + **daily 편입**(naver/wyyyes/bunjang/yahoo/**danawa**, 가벼운 requests라 daily OK). 대시보드 SOURCE_KO/COLOR에 danawa(청록#00aab5) 등록. `run.py html` 재생성 확인.
+- 🎯 **다음**: 네이버(국내 새제품 호가)와 danawa(최저가 비교) 둘 다 국내 신품 → 매물 풍부. `run.py group` 재실행 시 자동블로킹 합류. ⚠️ 기타106 = renormalize 대상(extract 사전 보강 후 `run.py renormalize`).
+
+## 이번 세션 변경 (2026-06-24 #5) — 라쿠텐 이치바 추가
+
+### ⭐ 신규 소스 라쿠텐 (`run.py rakuten`) — 일본 신품/중고 호가(JPY)
+- `collectors/api/rakuten.py`. **공식 Rakuten Ichiba Item Search API**(가벼운 requests, CF/Playwright 불필요).
+  - 엔드포인트 `app.rakuten.co.jp/services/api/IchibaItem/Search/20220601`, params `applicationId·keyword·format=json·hits(≤30)·page·sort=standard`.
+  - 응답 `Items[]` 평탄구조(20220601). `itemName·itemPrice(JPY)·itemUrl·itemCode·shopName·mediumImageUrls(문자열 리스트)·genreId`. 구버전 `{Item:{...}}`·dict 이미지도 방어(`_unwrap`/`_image`).
+  - 저장: `source=rakuten`, currency JPY, price_krw=fx보정(amiami/yahoo/hlj 동일단위), **is_sold=0(점포 호가)**, condition=extract 추정(中古 점포 섞임). 발매일 없음.
+- ⚠️ **무료 applicationId 키 필요**(eBay와 동일 패턴, 단 **즉시발급·무심사**). 검색 페이지 HTML은 Akamai 차단(`Reference #...`)이라 스크랩 불가 → API만 길.
+  - 발급: https://webservice.rakuten.co.jp/ 앱등록 → `.env`에 `RAKUTEN_APP_ID=<id>`.
+- 배선: `run.py rakuten` 단독 + **weekly 편입**(amiami/hlj/bbts/suruga/**rakuten** → group 합류). 키 없으면 쿼리별 try/except로 skip(0 rows, 전체 안 죽음). 검증: 키 미설정 상태 `python run.py rakuten` EXIT=0 정상.
+- 대시보드 SOURCE_KO/COLOR에 rakuten(진빨강#bf0000) 등록.
+- 🎯 **다음**: 키 발급 후 `python run.py rakuten` → `run.py group` 재실행하면 자동블로킹 합류. 야후옥션(낙찰=실거래)과 라쿠텐(점포 호가) = 일본 호가/실거래 괴리 분석 표본.
+
+## 이번 세션 변경 (2026-06-24 #4b) — FlareSolverr 인프라 + 스루가야
+
+### ⭐ FlareSolverr 도입 (강한 Cloudflare 우회 인프라)
+- **동기**: 스루가야 CF managed challenge가 headless/headed/stealth Playwright 다 미통과. 사용자가 인프라 도입 선택.
+- **셋업**: Docker `ghcr.io/flaresolverr/flaresolverr:latest`, 포트 8191, `--restart unless-stopped`.
+  ```
+  docker run -d --name flaresolverr -p 8191:8191 -e LOG_LEVEL=info --restart unless-stopped ghcr.io/flaresolverr/flaresolverr:latest
+  ```
+- **사용법**: `POST http://localhost:8191/v1` `{cmd:"request.get", url, maxTimeout}` → `solution.response`에 CF 풀린 HTML. 환경변수 `FLARESOLVERR_URL`로 주소 변경 가능.
+- ⚠️ Docker Desktop 켜져 있어야 함. weekly 자동수집의 suruga 단계가 이걸 의존(없으면 헬스체크 후 skip).
+
+### ⭐ 신규 소스 스루가야 (`run.py suruga`) — 일본 중고/재고 정찰가
+- `collectors/scrape/suruga.py`. FlareSolverr 경유. yahoo_jp(낙찰=실거래) 보완 = 일본 중고 **고정가 매장 정찰가**.
+- **파싱**: 검색카드 `<div class="photo_box">` 단위 분할 → product/detail/<id> + h3.product-name(풀제목) + .condition(상품타입) + .brand(메이커JP). **가격은 페이지 GTM JS `item_product.price`(정수 JPY)를 item_id로 매핑**(DOM 가격표기는 배송표/타임세일 섞여 지저분).
+- **결과**: 363행, 347 가격. 괴수281·특촬78. condition=used 고정(스루가야 중고위주), is_sold=0(매장 호가). ⚠️ 일부 비피규어(캐릭터카드·플레이매트) 혼입. ⚠️ maker가 일본어(バンダイ) → 영문 소스(amiami/bbts)와 maker 매칭 시 불일치 주의.
+- weekly에 편입(amiami/hlj/bbts/**suruga**).
+- 대시보드 SOURCE_KO/COLOR에 suruga(보라#7b2ff7) 등록.
+
+## 이번 세션 변경 (2026-06-24 #4) — 사이트 추가(HLJ·BBTS) + 자동수집 분리
+
+### ⭐ 자동수집 daily/weekly 분리 (사용자 승인)
+- **동기**: 호가/실거래는 매일 변동(시계열 가치) vs 정가는 거의 불변+Playwright/CF 무거움 → 같은 daily에 섞으면 CF로 daily 전체 지연/멈춤 위험.
+- **`run.py daily`** (매일 09시 `FiguresAnalysisDaily`, 20시 `FiguresAnalysis_Daily`): naver+wyyyes+bunjang+**yahoo(신규 편입)** → report+html. yahoo는 requests라 가벼워 daily OK.
+- **`run.py weekly`** (신규, 일요일 10시 `FiguresWeekly`+`run_weekly.bat`): fx→**amiami+hlj+bbts**(정가)→`group`(재블로킹)→premium+pricing→html. 전부 try/except로 1개 실패가 전체 안 죽임.
+- ⚠️ `FiguresAnalysisDaily`(09시)+`FiguresAnalysis_Daily`(20시) **둘 다 run_daily.bat** — 1일2회(중복인지 의도인지 불명, 삭제 안 함). snapshot 누적이라 무해.
+
+### ⭐ 신규 소스 BBTS (`run.py bbts`) — 미국 새제품 정가(USD)
+- `collectors/scrape/bbts.py`. Cloudflare challenge(amiami와 동일) → Playwright. 검색결과 서버렌더 `.product-card` DOM → 페이지 컨텍스트 `evaluate`로 파싱(XHR API 없음).
+- 카드: href(/product/...-<code>), title, company("By:<maker>"), price("PRE-ORDER\\n$129.99"), img. USD→price_krw fx보정. condition new, is_sold 0.
+- ⚠️ **CF 피로 회피 = 쿼리마다 fresh context**(한 컨텍스트 다량탐색 시 2~3페이지 후 challenge 안풀림). 페이지당 20건, 쿼리당 최대 40건(page3은 challenge로 보통 0).
+- **결과**: 152고유행. 전부 가격. 괴수110·특촬34. maker Bandai/Hiya/threezero/McFarlane/Funko 등 잘 추출.
+- 대시보드 SOURCE_KO/COLOR에 bbts(빨강#d62828) 등록.
+
+## 이번 세션 변경 (2026-06-24 #4a) — HLJ 사이트 추가
+
+### ⭐ 신규 소스 HLJ (`run.py hlj`) — 해외(일본발) 새제품 정가
+- **동기**: 0.5순위 사이트확장. 시세밴드 표본↑. eBay는 키 막힘 → 🟡 HLJ 우선.
+- **2단계 수집** (`collectors/scrape/hlj.py`, 평범한 requests.Session, CF/인증 불필요):
+  1. `search/?Word=<kw>&Page=<n>` HTML → 카드 정규식(`_CARD_RE`)으로 item_code·이름·url·이미지 + csrf토큰(`_CSRF_RE`). 24건/페이지.
+  2. `search/livePrice/?item_codes=<csv>&csrfmiddlewaretoken=<tok>` JSON(배치) → **JPYprice(정가 엔)**·release_date·stockStatusCode. (가격이 검색HTML엔 없고 JS 지연로딩 — NEXT_STEPS에 적힌 그 AJAX 엔드포인트가 livePrice였음.)
+- 저장: `source=hlj`, currency JPY(JPYprice), price_krw=fx보정(amiami/yahoo와 동일단위), condition new, is_sold 0. source_date=발매(예정)일 문자열("August 2026"). 제목 `html.unescape`.
+- **결과**: 571고유행(586수집·dedup). 전부 가격+환율보정. 노이즈 0. 장르 괴수454·특촬89·괴물18·기타10. 가격 JPY 350~227,900(평균7,789).
+- 대시보드: `html_report.py` SOURCE_KO/SOURCE_COLOR에 hlj(파랑#1f6feb)+yahoo_jp(빨강) 등록. `run.py html` 재생성, 카드 노출 확인.
+- **수동수집 유지**(amiami/yahoo처럼). 정가 자주 안 바뀜 → daily 미편입. 자동화 원하면 사용자 확인 후 daily에 추가.
+
+### 다음 후보
+- **HLJ↔amiami↔국내 매칭**: HLJ도 일본 정가 → `run.py group` 재실행하면 자동블로킹에 합류(character+maker+연식). 단 HLJ는 maker 추출 약함(`maker=None` 다수, 라인명이 제목 앞 "Series:"형) → grouping 정밀도 영향 점검 필요.
+- 매칭확대(#1)·비교UI(#2)는 여전히 미착수(사용자 핵심요구).
 
 ## 이번 세션 변경 (2026-06-24 #3) — 상품그룹 매처 + 대시보드 레이아웃
 
@@ -42,18 +130,26 @@
 - 소스별: 네이버 3,360 · 번개장터 881 · 아미아미 433 · 와이스 39 (상품별 최신 기준 ~4,700건)
 - 모든 행 한 테이블 `product_listing`. `collected_at`로 스냅샷 누적 → 시계열 가능. 분석은 상품별 최신 1건.
 
-**연동 완료 소스 (6)**:
+**연동 완료 소스 (9)**:
 | 소스 | 명령 | 방식 | 데이터 | 자동수집 |
 |------|------|------|--------|----------|
 | 네이버쇼핑 | `run.py collect` | 공식 API | 국내 새제품 호가 | daily |
 | 와이스 | `run.py wyyyes` | 비공식 JSON API | **국내 낙찰가=실거래** + 진행중 경매 + 상세/상태 | daily + 3h 폴링 |
 | 번개장터 | `run.py bunjang` | 비공식 API | 국내 중고 호가 + 등록일/지역 | daily |
-| 아미아미 | `run.py amiami` | Playwright(CF우회) | **일본 정가 + 발매일 + JAN바코드** | 수동(주1회 권장) |
-| 야후옥션JP | `run.py yahoo` | __NEXT_DATA__ JSON | **일본 중고 낙찰가=실거래** | 수동 |
+| 아미아미 | `run.py amiami` | Playwright(CF우회) | **일본 정가 + 발매일 + JAN바코드** | weekly |
+| 야후옥션JP | `run.py yahoo` | __NEXT_DATA__ JSON | **일본 중고 낙찰가=실거래** | daily |
+| HLJ | `run.py hlj` | search HTML + livePrice JSON | **해외 새제품 정가**(JPY)+발매일 | weekly |
+| BBTS | `run.py bbts` | Playwright(CF) + DOM 파싱 | **미국 새제품 정가**(USD) | weekly |
+| 스루가야 | `run.py suruga` | FlareSolverr(CF) + GTM JS | **일본 중고 정찰가**(JPY) | weekly(FlareSolverr 필요) |
+| 다나와 | `run.py danawa` | dsearch HTML | **국내 가격비교 최저가**(KRW) 602행 | daily |
+| Hobby Search | `run.py hobbysearch` | FlareSolverr(CF) + c-card | **일본 새제품 정가**(JPY) 263행 | weekly(FlareSolverr) |
+| Entertainment Earth | `run.py entearth` | FlareSolverr(CF) + data-* | **미국 새제품 정가**(USD) 301행 | weekly(FlareSolverr) |
+| 라쿠텐 | `run.py rakuten` | 공식 Ichiba API | **일본 신품/중고 호가**(JPY) | ⏸ **보류**(일본폰 인증 필요) |
 | eBay | `run.py ebay` | 공식 API | 해외 호가 | ⏸ **키 발급 대기중** |
 
 **자동화 (Windows 작업 스케줄러)**:
-- `FiguresAnalysisDaily` — 매일 09:00, 전체 수집→리포트→HTML
+- `FiguresAnalysisDaily` 09:00 + `FiguresAnalysis_Daily` 20:00 — `run.py daily`(호가/실거래: naver+wyyyes+bunjang+yahoo→리포트→HTML)
+- `FiguresWeekly` — 일요일 10:00, `run.py weekly`(정가+중고: amiami+hlj+bbts+**suruga**→group→premium/pricing→HTML). ⚠️ suruga는 FlareSolverr 도커 필요(없으면 skip).
 - `FiguresWyyyesPoll` — 3시간마다, 와이스 낙찰가 누적
 - ⚠️ PC 켜져 있어야 실행. 24시간 원하면 VPS.
 
@@ -116,10 +212,13 @@
 ### 4순위 시계열 (며칠 누적 후)
 - 스냅샷 며칠 쌓이면 `run.py timeseries`. 현재 1일치라 아직 무의미.
 
-### 보류 (인프라 필요)
-- **만다라케**: 지역선택 splash 게이트. EN클릭→본사 튕김. 지역쿠키 우회 추가조사 필요.
-- **스루가야**: 아미아미보다 강한 Cloudflare("Just a moment"). stealth 브라우저/레지덴셜 프록시 필요.
-- **당근/중고나라**: 강한 봇차단·인증. Phase3, 전용 인프라.
+### 보류 (인프라 필요) — 2026-06-24#4 재정찰 결과 추가
+- ✅ **스루가야 — 해결(FlareSolverr 도입)**. 위 #4b 참조. 더이상 보류 아님.
+- **만다라케 — 미해결(게이트)**: `order.mandarake.co.jp/order/listPage/list?keyword=`·`order/?lang=en` 모두 **splash(title=MANDARAKE, ~9551byte 고정)**만 반환. **FlareSolverr(실브라우저 JS실행)로도 splash 그대로** → CF/JS리다이렉트 아님. lang=ja·dispCount·categoryCode·쿠키(language/over18) 변형 전부 splash. 게이트가 **지역/IP 또는 깊은 세션플로 기반** 추정(한국IP 차단 가능성). 리버싱 or 일본 프록시 필요. **단 스루가야가 일본중고 카테고리 이미 커버 → 만다라케 마진가치 낮음, 후순위.**
+- **Nin-Nin-Game**: PrestaShop(`/en/search?s=`)인데 검색결과 **JS렌더(XHR도 안잡힘)** + 빠른요청에 **403(WAF, administrative rules)**. 일본정가는 amiami/HLJ로 이미 커버 → **저가치라 보류 권장**.
+- **메루카리 JP**: DPoP 토큰. mercapi 라이브러리 or 유료 Apify.
+- **국내 옥션/G마켓**: 403. **당근/중고나라**: 봇차단·인증. 전용 인프라.
+- 📌 결론: 코드만으로 가능한 신규소스는 이번에 **HLJ·BBTS 추가로 소진**. 남은 건 전부 ① 사용자작업(eBay 키) or ② stealth/프록시 인프라. **다음 사이트 확장 전 인프라(예: FlareSolverr 도커 1개) 도입 결정 필요**.
 
 ---
 
