@@ -3,11 +3,13 @@
   python run.py init      # DB 초기화
   python run.py fx        # 환율 갱신
   python run.py collect   # 네이버 수집
+  python run.py ebay      # eBay Browse 수집 (해외 호가, 키 필요 §10.2)
   python run.py analyze   # 분석 출력
   python run.py timeseries# 시계열 추이 (누적 데이터 필요)
   python run.py report    # 주간 마크다운 리포트 생성
+  python run.py html      # HTML 대시보드 생성 (reports/dashboard.html)
   python run.py all       # fx -> collect -> analyze
-  python run.py daily     # fx -> collect -> report  (자동화용)
+  python run.py daily     # fx -> collect -> report + html  (자동화용)
 """
 import sys
 
@@ -24,6 +26,9 @@ def main():
     elif cmd == "collect":
         from collectors.api.naver import collect
         collect()
+    elif cmd == "ebay":
+        from collectors.api.ebay import collect
+        collect()
     elif cmd == "analyze":
         from analysis.price import run
         run()
@@ -33,11 +38,15 @@ def main():
     elif cmd == "report":
         from report.weekly import build
         build()
+    elif cmd == "html":
+        from report.html_report import build
+        build()
     elif cmd == "daily":
         from storage.db import init_db
         from fx.rates import update_fx
         from collectors.api.naver import collect
         from report.weekly import build
+        from report.html_report import build as build_html
         init_db()
         try:
             update_fx()
@@ -45,6 +54,7 @@ def main():
             print(f"[fx] skip ({e})")
         collect()
         build()
+        build_html()
     elif cmd == "all":
         from storage.db import init_db
         from fx.rates import update_fx

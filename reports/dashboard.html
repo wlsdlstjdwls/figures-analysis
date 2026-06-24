@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소프비 시장 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --line:#2a2e38; --txt:#e6e8ec; --mut:#9aa0ab; --acc:#5b8def; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font-family:-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif; }
+  header { padding:24px 28px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:20px; }
+  .sub { color:var(--mut); font-size:13px; margin-top:4px; }
+  .wrap { padding:24px 28px; max-width:1200px; margin:0 auto; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .card .k { color:var(--mut); font-size:12px; }
+  .card .v { font-size:24px; font-weight:600; margin-top:6px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px;
+            padding:18px 20px; margin-bottom:22px; }
+  h2 { font-size:15px; margin:0 0 14px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media(max-width:820px){ .grid2{ grid-template-columns:1fr; } }
+  canvas { max-height:300px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { padding:8px 10px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  th:first-child,td:first-child { text-align:left; }
+  th { color:var(--mut); cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); }
+  th:hover { color:var(--txt); }
+  td.t { text-align:left; white-space:normal; max-width:380px; }
+  a { color:var(--acc); text-decoration:none; }
+  .scroll { max-height:420px; overflow:auto; }
+  .num { font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>소프비 시장 대시보드</h1>
+  <div class="sub" id="sub"></div>
+</header>
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+
+  <div class="grid2">
+    <section><h2>인기 캐릭터 (물량)</h2><canvas id="popChart"></canvas></section>
+    <section><h2>가격대 구간 분포</h2><canvas id="tierChart"></canvas></section>
+  </div>
+
+  <section><h2>장르별 중앙가 (KRW)</h2><canvas id="genreChart"></canvas></section>
+
+  <section><h2>제조사별 가격/물량</h2><div class="scroll"><table id="makerTbl"></table></div></section>
+  <section><h2>캐릭터별 가격/물량</h2><div class="scroll"><table id="charTbl"></table></div></section>
+  <section><h2>고가 매물 TOP 20</h2><div class="scroll"><table id="topTbl"></table></div></section>
+</div>
+
+<script>
+const D = {"today": "2026-06-24", "total": 3327, "genre": [{"genre": "기타", "count": 1376, "median_krw": 21000, "p25": 8000, "p75": 39325, "min": 200, "max": 129800}, {"genre": "공룡", "count": 814, "median_krw": 30100, "p25": 21000, "p75": 47500, "min": 790, "max": 104200}, {"genre": "특촬", "count": 646, "median_krw": 31340, "p25": 19780, "p75": 54880, "min": 3850, "max": 144090}, {"genre": "괴수", "count": 452, "median_krw": 50200, "p25": 28200, "p75": 83500, "min": 2900, "max": 230900}, {"genre": "괴물", "count": 39, "median_krw": 56820, "p25": 33950, "p75": 87400, "min": 4500, "max": 189000}], "maker": [{"maker": "Bandai", "count": 429, "median_krw": 27615, "p25": 15282, "p75": 42512, "min": 2900, "max": 96700}, {"maker": "Banpresto", "count": 238, "median_krw": 24000, "p25": 21100, "p75": 28600, "min": 13000, "max": 46000}, {"maker": "TakaraTomy", "count": 73, "median_krw": 7300, "p25": 7300, "p75": 21700, "min": 2400, "max": 49800}, {"maker": "Ensky", "count": 71, "median_krw": 51100, "p25": 9120, "p75": 72685, "min": 6000, "max": 111500}, {"maker": "Kaiyodo", "count": 68, "median_krw": 330200, "p25": 139500, "p75": 534000, "min": 42000, "max": 1049000}, {"maker": "CCP", "count": 39, "median_krw": 213390, "p25": 96105, "p75": 297090, "min": 64300, "max": 382990}, {"maker": "Medicom", "count": 33, "median_krw": 140000, "p25": 77500, "p75": 247350, "min": 11000, "max": 542358}, {"maker": "Bullmark", "count": 2, "median_krw": 213450, "p25": 207625, "p75": 219275, "min": 201800, "max": 225100}, {"maker": "Yutaka", "count": 2, "median_krw": 5500, "p25": 5250, "p75": 5750, "min": 5000, "max": 6000}, {"maker": "Marmit", "count": 1, "median_krw": 1428160, "p25": 1428160, "p75": 1428160, "min": 1428160, "max": 1428160}, {"maker": "Marusan", "count": 1, "median_krw": 55300, "p25": 55300, "p75": 55300, "min": 55300, "max": 55300}, {"maker": "Popy", "count": 1, "median_krw": 30010, "p25": 30010, "p75": 30010, "min": 30010, "max": 30010}], "char": [{"character": "Dinosaur", "count": 777, "median_krw": 29900, "p25": 21000, "p75": 45900, "min": 790, "max": 101600}, {"character": "Kamen Rider", "count": 357, "median_krw": 27000, "p25": 17040, "p75": 42045, "min": 3850, "max": 102310}, {"character": "Ultraman", "count": 314, "median_krw": 43485, "p25": 25000, "p75": 69848, "min": 4900, "max": 225100}, {"character": "Godzilla", "count": 290, "median_krw": 63095, "p25": 34592, "p75": 83160, "min": 2900, "max": 201200}, {"character": "Jurassic", "count": 30, "median_krw": 45000, "p25": 25500, "p75": 89000, "min": 2400, "max": 176000}, {"character": "Gamera", "count": 11, "median_krw": 188650, "p25": 121150, "p75": 708200, "min": 30500, "max": 899000}, {"character": "King Ghidorah", "count": 7, "median_krw": 44100, "p25": 41250, "p75": 163300, "min": 25900, "max": 288400}, {"character": "Tyrannosaurus", "count": 4, "median_krw": 71600, "p25": 49625, "p75": 110150, "min": 12500, "max": 197000}, {"character": "Baltan", "count": 1, "median_krw": 55300, "p25": 55300, "p75": 55300, "min": 55300, "max": 55300}, {"character": "Mothra", "count": 1, "median_krw": 29300, "p25": 29300, "p75": 29300, "min": 29300, "max": 29300}], "pop": [{"character": "Dinosaur", "listings": 777}, {"character": "Kamen Rider", "listings": 357}, {"character": "Ultraman", "listings": 314}, {"character": "Godzilla", "listings": 290}, {"character": "Jurassic", "listings": 30}, {"character": "Gamera", "listings": 11}, {"character": "King Ghidorah", "listings": 7}, {"character": "Tyrannosaurus", "listings": 4}, {"character": "Baltan", "listings": 1}, {"character": "Mothra", "listings": 1}], "tier_labels": ["~3만", "3~10만", "10~30만", "30~100만", "100만+"], "tier_counts": [1611, 1217, 378, 113, 8], "top": [{"price_krw": 2433400.0, "genre": "괴수", "maker": null, "character": "Godzilla", "title_raw": "180 180 100 cm 고질라(1989) 소프비킷트 복각판 스케일 전고 약 소프트 비닐", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=8437160221&ctag=8437160221&lptag=V94287830579&itemId=24402325205&vendorItemId=94287830579&spec=10305199"}, {"price_krw": 2430400.0, "genre": "특촬", "maker": null, "character": "Ultraman", "title_raw": "ULTRAMAN MAZZCOT 울트라맨 피그몬 소프비 피규어", "url": "https://smartstore.naver.com/main/products/13038820806"}, {"price_krw": 2373600.0, "genre": "괴수", "maker": null, "character": "Godzilla", "title_raw": "180 180 100 cm 고질라(1989) 소프비킷트 복각판 스케일 전고 약 소프트 비닐", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=8437160221&ctag=8437160221&lptag=V94118813386&itemId=24402325205&vendorItemId=94118813386&spec=10305199"}, {"price_krw": 2070300.0, "genre": "괴수", "maker": null, "character": "Godzilla", "title_raw": "180 180 100 cm 고질라(1989) 소프비킷트 복각판 스케일 전고 약 소프트 비닐", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=8437160221&ctag=8437160221&lptag=I24402325205&itemId=24402325205&vendorItemId=91417132335&spec=10305199"}, {"price_krw": 1912840.0, "genre": "괴수", "maker": null, "character": "Godzilla", "title_raw": "고질라(1989) 1/80 소프비 키트 복각판 1/80 전고 약 100cm 무도장 조립 키", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=9404860674&ctag=9404860674&lptag=I27938753767&itemId=27938753767&vendorItemId=94897079021&spec=10305199"}, {"price_krw": 1428160.0, "genre": "괴수", "maker": "Marmit", "character": "Godzilla", "title_raw": "고질라 CCP 메디컴 토이 마미트 소프비 Frog Tree", "url": "https://smartstore.naver.com/main/products/13527389463"}, {"price_krw": 1179420.0, "genre": "특촬", "maker": "Kaiyodo", "character": "Kamen Rider", "title_raw": "KAIYODO 메가소프비 가면라이더 신가면라이더 470mm 피규어 메이드인재팬", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=9516576816&ctag=9516576816&lptag=I28364797135&itemId=28364797135&vendorItemId=95317258548&spec=10305199"}, {"price_krw": 1049000.0, "genre": "괴수", "maker": "Kaiyodo", "character": "Godzilla", "title_raw": "[출시] 카이요도 메가소프비 버닝 고질라 VS 데스토로이아 (1995) 스태츄 피규어", "url": "https://smartstore.naver.com/main/products/11568529314"}, {"price_krw": 963320.0, "genre": "괴수", "maker": null, "character": "Ultraman", "title_raw": "1/6 특촬 시리즈 울트라맨 고모라 하이그레이드 버전. 약 280mm 소프비 피규어", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=9181302551&ctag=9181302551&lptag=V95361688362&itemId=27076734957&vendorItemId=95361688362&spec=10305199"}, {"price_krw": 956900.0, "genre": "괴수", "maker": "Kaiyodo", "character": "Godzilla", "title_raw": "카이요도 고지라 vs 데스토로이야 1995 메가 소프비 고질라 피규어", "url": "https://smartstore.naver.com/main/products/11977982505"}, {"price_krw": 918000.0, "genre": "괴수", "maker": "Kaiyodo", "character": "Godzilla", "title_raw": "카이요도 메가소프비 고질라 vs 데스토로이야 1995 고지라 피규어", "url": "https://smartstore.naver.com/main/products/12004962305"}, {"price_krw": 899000.0, "genre": "괴수", "maker": "Kaiyodo", "character": "Gamera", "title_raw": "[출시] 카이요도 메가 소프비 가메라 1996 (G2) 스태츄 피규어", "url": "https://smartstore.naver.com/main/products/11396305993"}, {"price_krw": 890000.0, "genre": "특촬", "maker": "Kaiyodo", "character": "Kamen Rider", "title_raw": "가면라이더 제2호 메가 소프비 500mm 피규어 - 카이요도  1개", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=8284532186&ctag=8284532186&lptag=I25531739116&itemId=25531739116&vendorItemId=95565559055&spec=10305199"}, {"price_krw": 855000.0, "genre": "특촬", "maker": null, "character": null, "title_raw": "(신품 미개봉)초전자 바이오맨 하이퍼어택 시리즈 소프비 우주특공대", "url": "https://smartstore.naver.com/main/products/12136025066"}, {"price_krw": 855000.0, "genre": "특촬", "maker": null, "character": null, "title_raw": "(미개봉)전격전대 체인지맨 소프비 피규어 세트", "url": "https://smartstore.naver.com/main/products/12176054967"}, {"price_krw": 839740.0, "genre": "특촬", "maker": "Medicom", "character": "Kamen Rider", "title_raw": "메디콤 토이 도에이 레트로 소프비 컬렉션 가면 라이더 ZX", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=9115277679&ctag=9115277679&lptag=I26808478481&itemId=26808478481&vendorItemId=93882733958&spec=10305199"}, {"price_krw": 830000.0, "genre": "괴수", "maker": "Kaiyodo", "character": "Gamera", "title_raw": "[예약] 카이요도 메가소프비 가메라 1996 (G2) 피규어 KAIYODO", "url": "https://smartstore.naver.com/main/products/11951569593"}, {"price_krw": 828000.0, "genre": "특촬", "maker": "Bandai", "character": null, "title_raw": "반다이 광전대 마스크맨 지저제국 대결 소프비피규어 6종 세트", "url": "https://smartstore.naver.com/main/products/9044603874"}, {"price_krw": 820760.0, "genre": "기타", "maker": "Kaiyodo", "character": null, "title_raw": "카이요도(KAIYODO) 북두의권 쟈기 메가소프비 피규어 500mm 메이드인재팬", "url": "https://link.coupang.com/re/PCSNAVERPCSDP?pageKey=9237793815&ctag=9237793815&lptag=I28311199979&itemId=28311199979&vendorItemId=95263839390&spec=10305199"}, {"price_krw": 803000.0, "genre": "특촬", "maker": null, "character": null, "title_raw": "(미개봉) 광전대 마스크맨 소프비세트 빛의전사 마스크맨 피규어", "url": "https://smartstore.naver.com/main/products/12176031876"}], "median_all": 31580, "max_all": 2433400};
+const won = n => (n==null||isNaN(n)) ? "" : Number(n).toLocaleString("ko-KR");
+
+document.getElementById("sub").textContent =
+  `${D.today} · 분석 ${D.total.toLocaleString()}건 (상품별 최신, 호가 기준) · 네이버 쇼핑`;
+
+const cards = [
+  ["분석 상품 수", D.total.toLocaleString()],
+  ["전체 중앙가", won(D.median_all)+"원"],
+  ["최고가", won(D.max_all)+"원"],
+  ["캐릭터 종류", D.pop.length],
+];
+document.getElementById("cards").innerHTML = cards.map(
+  ([k,v])=>`<div class="card"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join("");
+
+const GRID = "#2a2e38", TXT = "#9aa0ab";
+Chart.defaults.color = TXT; Chart.defaults.borderColor = GRID;
+
+new Chart(popChart, { type:"bar",
+  data:{ labels:D.pop.map(r=>r.character),
+    datasets:[{ label:"물량", data:D.pop.map(r=>r.listings), backgroundColor:"#5b8def" }] },
+  options:{ indexAxis:"y", plugins:{legend:{display:false}} } });
+
+new Chart(tierChart, { type:"doughnut",
+  data:{ labels:D.tier_labels,
+    datasets:[{ data:D.tier_counts,
+      backgroundColor:["#3b82f6","#22c55e","#eab308","#f97316","#ef4444"] }] },
+  options:{ plugins:{legend:{position:"right"}} } });
+
+new Chart(genreChart, { type:"bar",
+  data:{ labels:D.genre.map(r=>r.genre),
+    datasets:[{ label:"중앙가(원)", data:D.genre.map(r=>r.median_krw), backgroundColor:"#22c55e" }] },
+  options:{ plugins:{legend:{display:false}} } });
+
+// ---- 정렬 가능한 표 ----
+function makeTable(el, rows, cols) {
+  if(!rows.length){ el.innerHTML = "<tr><td>데이터 없음</td></tr>"; return; }
+  let sortKey=cols[0].k, asc=false;
+  function render(){
+    const sorted=[...rows].sort((a,b)=>{
+      let x=a[sortKey], y=b[sortKey];
+      if(typeof x==="number"&&typeof y==="number") return asc?x-y:y-x;
+      x=(""+x); y=(""+y); return asc?x.localeCompare(y):y.localeCompare(x);
+    });
+    el.innerHTML =
+      "<thead><tr>"+cols.map(c=>`<th data-k="${c.k}">${c.label}${sortKey===c.k?(asc?" ▲":" ▼"):""}</th>`).join("")+"</tr></thead>"+
+      "<tbody>"+sorted.map(r=>"<tr>"+cols.map(c=>{
+        let v=r[c.k];
+        if(c.link&&r.url) return `<td class="t"><a href="${r.url}" target="_blank">${v??""}</a></td>`;
+        if(c.t) return `<td class="t">${v??""}</td>`;
+        if(c.money) v=won(v);
+        else if(typeof v==="number") v=v.toLocaleString();
+        return `<td class="num">${v??""}</td>`;
+      }).join("")+"</tr>").join("")+"</tbody>";
+    el.querySelectorAll("th").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k; if(k===sortKey) asc=!asc; else { sortKey=k; asc=false; } render();
+    });
+  }
+  render();
+}
+
+const priceCols=[
+  {k:"count",label:"물량"},{k:"median_krw",label:"중앙가",money:1},
+  {k:"p25",label:"p25",money:1},{k:"p75",label:"p75",money:1},
+  {k:"min",label:"최저",money:1},{k:"max",label:"최고",money:1}];
+
+makeTable(makerTbl, D.maker, [{k:"maker",label:"제조사"},...priceCols]);
+makeTable(charTbl, D.char, [{k:"character",label:"캐릭터"},...priceCols]);
+makeTable(topTbl, D.top, [
+  {k:"price_krw",label:"가격",money:1},
+  {k:"genre",label:"장르"},{k:"maker",label:"제조사"},{k:"character",label:"캐릭터"},
+  {k:"title_raw",label:"상품명",t:1,link:1}]);
+</script>
+</body>
+</html>

@@ -4,16 +4,12 @@
 """
 import pandas as pd
 
-from storage.db import get_conn
+from storage.db import load_latest_df
 
 
 def load_df():
-    conn = get_conn()
-    df = pd.read_sql_query(
-        "SELECT * FROM product_listing WHERE price_krw IS NOT NULL AND is_noise=0", conn
-    )
-    conn.close()
-    return df
+    # 상품별 최신 스냅샷만 (중복 스냅샷 카운트 방지)
+    return load_latest_df()
 
 
 def remove_outliers_iqr(s: pd.Series) -> pd.Series:
