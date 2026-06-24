@@ -32,6 +32,10 @@ MAKER_KO = {
     "Bullmark": "불마크", "Yutaka": "유타카", "Marmit": "마미트",
     "Marusan": "마루산", "Popy": "포피", "X-Plus": "엑스플러스", "M1go": "M1고",
 }
+COND_KO = {
+    "used_sealed": "미개봉", "used_open": "개봉", "used": "중고",
+    "new": "새상품", "prize": "프라이즈",
+}
 
 
 def _ko(d, v):
@@ -52,8 +56,11 @@ def build(today=None):
     df["status_ko"] = df["is_sold"].map(lambda x: "실거래" if x == 1 else "호가")
 
     df["sdate"] = df["source_date"].map(lambda v: str(v)[:10] if pd.notna(v) else None)
+    df["cond_ko"] = df["condition"].map(lambda v: COND_KO.get(v) if pd.notna(v) else None)
+    df["desc"] = df["description"].map(lambda v: str(v)[:120] if pd.notna(v) else None)
     listings = (df[["price_krw", "source_ko", "mall_name", "genre", "character_ko",
-                    "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate"]]
+                    "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate",
+                    "cond_ko", "desc"]]
                 .sort_values("price_krw", ascending=False)
                 .rename(columns={"character_ko": "character", "maker_ko": "maker"}))
     listings["price_krw"] = listings["price_krw"].astype(int)
@@ -136,6 +143,10 @@ _TEMPLATE = r"""<!DOCTYPE html>
             color:var(--gc,#3b82f6); background:color-mix(in srgb, var(--gc,#3b82f6) 16%, transparent); }
   .meta { font-size:11px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tagk { font-size:10.5px; color:var(--acc); background:rgba(91,141,239,.12); padding:2px 7px; border-radius:6px; }
+  .cbadge { font-size:10.5px; padding:2px 7px; border-radius:6px; font-weight:600;
+            color:#eab308; background:rgba(234,179,8,.14); }
+  .pdesc { font-size:11px; color:#aeb4be; line-height:1.4; max-height:30px; overflow:hidden; }
+  body.view-grid .pdesc { display:none; }
   .more { display:block; margin:28px auto 0; padding:11px 26px; background:var(--card);
           border:1px solid var(--line); color:var(--txt); border-radius:10px; font-size:13px; cursor:pointer; }
   .empty { text-align:center; color:var(--mut); padding:60px 0; }
@@ -236,14 +247,18 @@ function card(r){
   const badge = r.status_ko==="실거래"
     ? `<span class="badge sold">실거래</span>` : `<span class="badge ask">호가</span>`;
   const gb = r.genre ? `<span class="gbadge">${esc(r.genre)}</span>` : "";
+  const cb = r.cond_ko ? `<span class="cbadge">${esc(r.cond_ko)}</span>` : "";
   const dlabel = r.sdate ? (r.status_ko==="실거래" ? "거래 " : "마감 ")+r.sdate : "";
   const meta = [r.source_ko, r.mall_name, dlabel].filter(Boolean).map(esc).join(" · ");
-  return `<a class="pcard" style="--gc:${gc}" href="${esc(r.url||'#')}" target="_blank" rel="noopener">
+  const desc = r.desc ? `<div class="pdesc">${esc(r.desc)}</div>` : "";
+  const titleAttr = r.desc ? ` title="${esc(r.desc)}"` : "";
+  return `<a class="pcard" style="--gc:${gc}" href="${esc(r.url||'#')}" target="_blank" rel="noopener"${titleAttr}>
     ${img}
     <div class="pbody">
       <div class="pname">${esc(r.title_raw)}</div>
       <div class="pprice">${won(r.price_krw)}<span style="font-size:12px;color:var(--mut)"> 원</span></div>
-      <div class="prow">${badge}${gb}${tags}</div>
+      <div class="prow">${badge}${cb}${gb}${tags}</div>
+      ${desc}
       <div class="meta">${meta}</div>
     </div></a>`;
 }

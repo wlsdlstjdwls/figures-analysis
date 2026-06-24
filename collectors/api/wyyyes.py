@@ -21,6 +21,7 @@ from storage.db import get_conn, init_db
 from normalize.extract import extract_fields
 
 BASE = "https://wyyyes.com/r0.app/discovery"
+APP = "https://wyyyes.com/r0.app"          # 상세(stock) API
 HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
 # 소프비/괴수 중심 + 전 분야. figure가 메인 카테고리.
@@ -33,6 +34,16 @@ def _get(path):
     r = requests.get(f"{BASE}/{path}", headers=HEADERS, timeout=20)
     r.raise_for_status()
     return r.json().get("result", [])
+
+
+def _get_stock(stock_id):
+    """상품 상세: 설명(inspections)·상태(compositions)·배송비 등."""
+    try:
+        r = requests.get(f"{APP}/stocks/{stock_id}", headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        return r.json().get("result", {}) or {}
+    except Exception:
+        return {}
 
 
 def _condition_from_compositions(comps):
@@ -75,17 +86,22 @@ def collect(categories=None):
             f = extract_fields(name)
             price = it.get("amountPaid")
             new_sold += 1
+            # 신규 낙찰만 상세 보강 (상태·설명)
+            detail = _get_stock(it.get("stockId"))
+            cond = _condition_from_compositions(detail.get("compositions")) or f["condition"]
+            desc = detail.get("inspections")
+            time.sleep(0.2)
             conn.execute(
                 """INSERT OR IGNORE INTO product_listing
                    (source, source_item_id, title_raw, character, genre, maker, line,
                     scale, condition, price, currency, price_krw, is_sold, is_noise,
-                    mall_name, category, url, image_url, source_date, query, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    mall_name, category, url, image_url, source_date, description, query, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     "wyyyes",
                     sid,
                     f["title"], f["character"], f["genre"], f["maker"], f["line"],
-                    f["scale"], f["condition"],
+                    f["scale"], cond,
                     float(price) if price not in (None, "") else None,
                     "KRW",
                     float(price) if price not in (None, "") else None,
@@ -96,6 +112,7 @@ def collect(categories=None):
                     it.get("redirectUriWeb"),
                     it.get("thumbnail"),
                     it.get("createdAt"),    # 거래(낙찰) 시각
+                    desc,
                     f"{cat}-sold",
                     now,
                 ),
@@ -123,8 +140,8 @@ def collect(categories=None):
                 """INSERT OR IGNORE INTO product_listing
                    (source, source_item_id, title_raw, character, genre, maker, line,
                     scale, condition, price, currency, price_krw, is_sold, is_noise,
-                    mall_name, category, url, image_url, source_date, query, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    mall_name, category, url, image_url, source_date, description, query, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     "wyyyes",
                     it.get("_id"),
@@ -140,6 +157,7 @@ def collect(categories=None):
                     f"https://wyyyes.com/timeAuction/{it.get('_id')}",
                     stock.get("thumbnail"),
                     it.get("endAt"),        # 경매 마감 예정
+                    stock.get("inspections"),
                     f"{cat}-active",
                     now,
                 ),

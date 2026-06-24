@@ -50,6 +50,8 @@ def init_db():
         conn.execute("ALTER TABLE product_listing ADD COLUMN image_url TEXT")
     if "source_date" not in cols:
         conn.execute("ALTER TABLE product_listing ADD COLUMN source_date TEXT")
+    if "description" not in cols:
+        conn.execute("ALTER TABLE product_listing ADD COLUMN description TEXT")
     conn.commit()
     conn.close()
     print(f"[db] initialized at {DB_PATH}")
