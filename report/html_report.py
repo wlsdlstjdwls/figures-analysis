@@ -18,7 +18,8 @@ from storage.db import load_latest_df
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "reports"
 
-SOURCE_KO = {"naver": "네이버쇼핑", "ebay": "이베이", "wyyyes": "와이스"}
+SOURCE_KO = {"naver": "네이버쇼핑", "ebay": "이베이", "wyyyes": "와이스",
+             "bunjang": "번개장터", "joongna": "중고나라", "danggn": "당근마켓"}
 CHAR_KO = {
     "Godzilla": "고질라", "Ultraman": "울트라맨", "Kamen Rider": "가면라이더",
     "Dinosaur": "공룡", "Jurassic": "쥬라기", "Gamera": "가메라",

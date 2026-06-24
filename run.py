@@ -5,6 +5,7 @@
   python run.py collect   # 네이버 수집
   python run.py ebay      # eBay Browse 수집 (해외 호가, 키 필요 §10.2)
   python run.py wyyyes    # WYYYES 수집 (국내 낙찰가=실거래 + 진행중 경매)
+  python run.py bunjang   # 번개장터 수집 (국내 중고 호가)
   python run.py analyze   # 분석 출력
   python run.py timeseries# 시계열 추이 (누적 데이터 필요)
   python run.py report    # 주간 마크다운 리포트 생성
@@ -33,6 +34,9 @@ def main():
     elif cmd == "wyyyes":
         from collectors.api.wyyyes import collect
         collect()
+    elif cmd == "bunjang":
+        from collectors.api.bunjang import collect
+        collect()
     elif cmd == "analyze":
         from analysis.price import run
         run()
@@ -50,6 +54,7 @@ def main():
         from fx.rates import update_fx
         from collectors.api.naver import collect
         from collectors.api.wyyyes import collect as collect_wyyyes
+        from collectors.api.bunjang import collect as collect_bunjang
         from report.weekly import build
         from report.html_report import build as build_html
         init_db()
@@ -62,6 +67,10 @@ def main():
             collect_wyyyes()
         except Exception as e:
             print(f"[wyyyes] skip ({e})")
+        try:
+            collect_bunjang()
+        except Exception as e:
+            print(f"[bunjang] skip ({e})")
         build()
         build_html()
     elif cmd == "all":
