@@ -2,10 +2,11 @@
 
 피규어 시장 가격·인기 분석 시스템. 상세 설계는 [PLAN.md](PLAN.md).
 
-## Phase1 MVP (현재)
-- 소스: 네이버 쇼핑 검색 API (국내 새제품 호가)
-- 저장: SQLite (`data/figures.db`)
-- 분석: 제조사/라인/캐릭터별 가격분포 + 인기 랭킹
+## 현재 소스
+- **네이버 쇼핑** API — 국내 새제품 호가
+- **와이스(WYYYES)** 비공식 API — 국내 **낙찰가(실거래)** + 진행중 경매. 컬렉터 거래 앱.
+- **eBay** Browse API — 해외 호가 (키 발급 후)
+- 저장: SQLite (`data/figures.db`) · 분석: 장르/제조사/캐릭터별 가격분포 + 인기 랭킹 + 실거래/호가 구분
 
 ## 설치
 ```
@@ -19,6 +20,7 @@ python run.py all        # 환율 -> 수집 -> 분석 (콘솔 출력)
 python run.py daily      # 환율 -> 수집 -> 리포트 + HTML (자동화용)
 python run.py collect    # 네이버 수집만
 python run.py ebay       # eBay Browse 수집 (해외 호가, EBAY_APP_ID/CERT 필요)
+python run.py wyyyes     # WYYYES(와이스) 수집 (국내 낙찰가=실거래 + 진행중 경매)
 python run.py analyze    # 분석 콘솔 출력
 python run.py report     # reports/report_<날짜>.md 생성
 python run.py html       # reports/dashboard.html 생성 (브라우저 대시보드)
