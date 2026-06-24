@@ -228,8 +228,14 @@ figures-analysis/
 6. ⚠️ **Sold price = Marketplace Insights API** → *Limited Release*. Application Growth Check 비즈니스 모델 심사 필요, 개인·비상업 거절 가능성 높음.
 - 한도: Browse API 무료 티어 약 5,000 call/day 수준(앱별 상이, 콘솔 확인).
 
-### 10.3 야후옥션 JP (Phase 2, 실거래 앵커)
-- Yahoo! Developer Network 앱 등록 → Auction API. 단 일부 옥션 API 신규발급 제한 이력 → 발급 가능 여부 선확인. 불가 시 스크랩 백업.
+### 10.3 야후옥션 JP — ❌ 경로 폐쇄 (실측 2026-06-24)
+- **옥션 Web API는 2018-01-22 서비스 종료.** 데이터 수집용 공개 API 없음 (남은 건 셀러 출품/수주용뿐).
+- Yahoo!쇼핑 API(商品検索)는 생존하나 **Yahoo! JAPAN이 일본 외 IP를 지역 차단** → 한국에서 가입·이용 불가(일본 VPN 필요).
+- **결론**: 한국 환경에서 야후 정식 API 경로 사실상 폐쇄. → **실거래/빈티지 시세는 eBay(§10.2)로 선회**, 야후옥션 낙찰가는 落札相場 사이트 스크랩(전용 인프라)로 후순위 처리.
+
+### 10.4 eBay — 실질적 해외/빈티지 앵커로 승격 (rev.3)
+- 한국 IP 접근 가능, 공식 API. 빈티지 소프비(불마크/마루산/고질라) 국제 거래 활발 → 괴수 고가 세그먼트 커버.
+- 발급은 §10.2. Browse=호가. sold는 Marketplace Insights 승인 필요(개인 어려움).
 
 ---
 
