@@ -21,7 +21,7 @@ OUT_DIR = ROOT / "reports"
 
 SOURCE_KO = {"naver": "네이버쇼핑", "ebay": "이베이", "wyyyes": "와이스",
              "bunjang": "번개장터", "joongna": "중고나라", "danggn": "당근마켓",
-             "amiami": "아미아미"}
+             "amiami": "아미아미", "yahoo_jp": "야후옥션JP"}
 CHAR_KO = {
     "Godzilla": "고질라", "Ultraman": "울트라맨", "Kamen Rider": "가면라이더",
     "Dinosaur": "공룡", "Jurassic": "쥬라기", "Gamera": "가메라",
@@ -96,6 +96,12 @@ def build(today=None):
         r["label"] = CHAR_KO.get(r["label"], r["label"])
     premium = prod + seg
 
+    # 판매가 추천: 매칭 상품별 시세→권장가 (실거래 우선)
+    from analysis.pricing import compute_pricing, FAST_MULT, TOP_MULT
+    pricing = compute_pricing(df)
+    for r in pricing:
+        r["label"] = (r["label"] or "")[:50]
+
     data = {
         "today": today,
         "total": int(len(df)),
@@ -106,6 +112,8 @@ def build(today=None):
         "genres": genres,
         "sources": sources,
         "premium": premium,
+        "pricing": pricing,
+        "price_policy": {"fast": FAST_MULT, "top": TOP_MULT},
         "listings": listings.to_dict(orient="records"),
     }
 
@@ -206,7 +214,15 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .kbadge { font-size:9.5px; padding:1px 6px; border-radius:5px; font-weight:700; flex:none; }
   .kbadge.prod { background:#16351f; color:#4ade80; border:1px solid #1f5130; }
   .kbadge.seg  { background:#2a2630; color:#a78bfa; border:1px solid #3b3548; }
+  .kbadge.real { background:#16351f; color:#4ade80; border:1px solid #1f5130; }
+  .kbadge.ask  { background:#2a2630; color:#9ca3af; border:1px solid #3b3548; }
   .premium.collapsed .prow2 { display:none; }
+  /* 판매가 추천 카드: 두 추천가 */
+  .precos { display:flex; gap:8px; margin-top:2px; }
+  .preco { flex:1; background:var(--card); border:1px solid var(--line); border-radius:9px; padding:7px 9px; }
+  .preco .lab { font-size:10px; color:var(--mut); margin-bottom:2px; }
+  .preco .val { font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .preco.fast .val { color:var(--sold); } .preco.top .val { color:#eab308; }
 
   /* ── 보기모드: 작은 그리드(촘촘) ── */
   body.view-grid .grid { grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:11px; }
@@ -260,6 +276,14 @@ _TEMPLATE = r"""<!DOCTYPE html>
 </header>
 
 <div class="wrap">
+  <section class="premium collapsed" id="priceSec" style="display:none">
+    <div class="phead" id="prHead">
+      <h2>💰 판매가 추천</h2>
+      <span class="pnote">매칭 상품별 국내 시세→권장가 · 실거래 우선(없으면 호가) · 빠른회전/고점</span>
+      <span class="caret" id="prCaret">▼ 펼치기</span>
+    </div>
+    <div class="prow2" id="priceRow"></div>
+  </section>
   <section class="premium collapsed" id="premiumSec" style="display:none">
     <div class="phead" id="pHead">
       <h2>💹 프리미엄율</h2>
@@ -414,6 +438,37 @@ setView(saved);
   let open=false; try{ open=localStorage.getItem("wyp")==="1"; }catch(e){}
   const sync=()=>{ sec.classList.toggle("collapsed",!open); caret.textContent=open?"▲ 접기":"▼ 펼치기"; };
   head.onclick=()=>{ open=!open; sync(); try{localStorage.setItem("wyp",open?"1":"0");}catch(e){} };
+  sync();
+})();
+
+// ── 판매가 추천 섹션 렌더 ──
+(function(){
+  const sec=document.getElementById("priceSec");
+  if(!D.pricing || !D.pricing.length) return;
+  sec.style.display="";
+  document.getElementById("priceRow").innerHTML = D.pricing.map(p=>{
+    const gc=gColor(p.genre);
+    const bBadge = p.basis==="실거래"
+      ? `<span class="kbadge real">실거래</span>`
+      : `<span class="kbadge ask">호가</span>`;
+    const sample = `표본: 실거래 ${p.n_sold} · 호가 ${p.n_ask}건`;
+    const vsList = p.list_krw
+      ? `정가 ${won(p.list_krw)}원 대비 <b>${p.vs_list_pct}%</b>`
+      : `정가 미상`;
+    return `<div class="pcard2" style="--gc:${gc}">
+      <div class="ptitle">${bBadge}${esc(p.label)}${p.genre?`<span class="gbadge">${esc(p.genre)}</span>`:""}</div>
+      <div class="pline">시세 ${won(p.market_krw)}원 · ${vsList}</div>
+      <div class="precos">
+        <div class="preco fast"><div class="lab">⚡ 빠른회전</div><div class="val">${won(p.fast_krw)}</div></div>
+        <div class="preco top"><div class="lab">📈 고점</div><div class="val">${won(p.top_krw)}</div></div>
+      </div>
+      <div class="pn">${sample}</div>
+    </div>`;
+  }).join("");
+  const head=document.getElementById("prHead"), caret=document.getElementById("prCaret");
+  let open=false; try{ open=localStorage.getItem("wypr")==="1"; }catch(e){}
+  const sync=()=>{ sec.classList.toggle("collapsed",!open); caret.textContent=open?"▲ 접기":"▼ 펼치기"; };
+  head.onclick=()=>{ open=!open; sync(); try{localStorage.setItem("wypr",open?"1":"0");}catch(e){} };
   sync();
 })();
 
