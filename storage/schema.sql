@@ -20,8 +20,9 @@ CREATE TABLE IF NOT EXISTS product_listing (
     category        TEXT,
     url             TEXT,
     image_url       TEXT,                   -- 썸네일 이미지
-    source_date     TEXT,                   -- 원본 날짜(와이스: 낙찰=거래시각 / 진행중=마감예정)
+    source_date     TEXT,                   -- 원본 날짜(와이스: 낙찰=거래시각 / 아미아미: 발매일 / 번개: 등록일)
     description     TEXT,                   -- 상품 설명/상태 메모 (와이스 inspections 등)
+    barcode         TEXT,                   -- JAN/바코드 (아미아미 jancode 등) — 사이트간 제품매칭 키
     query           TEXT,                   -- 어떤 검색어로 수집됐나
     collected_at    TEXT NOT NULL,          -- ISO8601
     UNIQUE(source, source_item_id, collected_at)

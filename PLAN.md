@@ -250,9 +250,12 @@ figures-analysis/
   |--------|------|------|------|
   | eBay | 공식 API | ✅ 가능(키 발급만) | 해외 호가, 빈티지 괴수. §10.2 |
   | 만다라케 | requests 200 | △ 가능, HTML 파싱 필요 | 빈티지 괴수 강함. CF 없음 |
-  | 아미아미 | requests/PW 403 | ✗ Cloudflare 차단 | 발매일·정가 보유하나 stealth/프록시 필요 |
-  | 스루가야 | PW 403 "Just a moment" | ✗ Cloudflare 차단 | 발매일+중고시세, 전용 인프라 필요 |
-  - 결론: JP 정가·발매일 라인(아미아미/스루가야)은 **Cloudflare 우회 인프라(stealth 브라우저/레지덴셜 프록시)** 갖춘 뒤 Phase3. 그 전까진 eBay(키)·만다라케(파싱)가 현실적 해외 경로.
+  | 아미아미 | **PW 브라우저 fetch** | ✅ **연동완료** | CF는 평범한 requests만 차단. 사이트 로드 후 페이지내 fetch로 API 통과. 발매일·정가·**JAN바코드**. §아래 |
+  | 스루가야 | PW 403 "Just a moment" | ✗ Cloudflare 차단 | 발매일+중고시세, 더 강한 CF challenge |
+  | 만다라케 | requests/PW splash | ✗ 지역선택 게이트 | 검색 진입에 지역쿠키 필요(EN클릭→본사로 튕김). 추가조사 필요 |
+  - **아미아미 우회법(실측)**: Cloudflare는 TLS핑거프린트로 *평범한 requests*만 403. **Playwright로 amiami.com 로드(CF 통과)→페이지 컨텍스트 fetch로 `api.amiami.com/api/v1.0/items?s_keywords=`** 호출하면 200. 검색 파라미터는 `s_keywords`(복수형). 헤더 `X-User-Key: amiami_dev`.
+  - **아미아미 가치**: `releasedate`(발매일=출시일) + `min_price`(정가 JPY→KRW) + `jancode`(바코드, 사이트간 매칭 §2.3) + maker. → **프리미엄율(중고시세/정가)** 분석 기반 확보. 새제품 정가는 자주 안 바뀜 → 저빈도(주1회) 수집 권장. Playwright라 daily엔 미포함.
+  - 결론: 스루가야는 더 강한 CF, 만다라케는 지역게이트 → 여전히 추가 인프라 필요. 아미아미로 발매일·정가 라인은 **확보**.
 
 ### 10.5 WYYYES(와이스) — 국내 실거래(낙찰가) 앵커 후보 (rev.4, 실측 2026-06-24)
 - **정체**: 컬렉터 특화 라이브 거래 앱. 다이캐스트·건프라·레고·스포츠카드·피규어·포켓몬카드·아트토이. PC 웹(wyyyes.com)·iOS·Android.

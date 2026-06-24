@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "reports"
 
 SOURCE_KO = {"naver": "네이버쇼핑", "ebay": "이베이", "wyyyes": "와이스",
-             "bunjang": "번개장터", "joongna": "중고나라", "danggn": "당근마켓"}
+             "bunjang": "번개장터", "joongna": "중고나라", "danggn": "당근마켓",
+             "amiami": "아미아미"}
 CHAR_KO = {
     "Godzilla": "고질라", "Ultraman": "울트라맨", "Kamen Rider": "가면라이더",
     "Dinosaur": "공룡", "Jurassic": "쥬라기", "Gamera": "가메라",
@@ -60,9 +61,20 @@ def build(today=None):
     df["year"] = df["title_raw"].str.extract(r"(19[5-9]\d|20[0-2]\d)", expand=False)
     df["cond_ko"] = df["condition"].map(lambda v: COND_KO.get(v) if pd.notna(v) else None)
     df["desc"] = df["description"].map(lambda v: str(v)[:120] if pd.notna(v) else None)
+
+    def _datelabel(row):
+        s, sold = row["source"], row["is_sold"]
+        if s == "amiami":
+            return "발매"
+        if s == "bunjang":
+            return "등록"
+        if s == "wyyyes":
+            return "거래" if sold == 1 else "마감"
+        return ""
+    df["datelabel"] = df.apply(_datelabel, axis=1)
     listings = (df[["price_krw", "source_ko", "mall_name", "genre", "character_ko",
                     "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate",
-                    "cond_ko", "desc", "year"]]
+                    "cond_ko", "desc", "year", "datelabel"]]
                 .sort_values("price_krw", ascending=False)
                 .rename(columns={"character_ko": "character", "maker_ko": "maker"}))
     listings["price_krw"] = listings["price_krw"].astype(int)
@@ -253,7 +265,7 @@ function card(r){
   const gb = r.genre ? `<span class="gbadge">${esc(r.genre)}</span>` : "";
   const yb = r.year ? `<span class="ybadge">${esc(r.year)}</span>` : "";
   const cb = r.cond_ko ? `<span class="cbadge">${esc(r.cond_ko)}</span>` : "";
-  const dlabel = r.sdate ? (r.status_ko==="실거래" ? "거래 " : "마감 ")+r.sdate : "";
+  const dlabel = r.sdate ? ((r.datelabel||"")+" "+r.sdate).trim() : "";
   const meta = [r.source_ko, r.mall_name, dlabel].filter(Boolean).map(esc).join(" · ");
   const desc = r.desc ? `<div class="pdesc">${esc(r.desc)}</div>` : "";
   const titleAttr = r.desc ? ` title="${esc(r.desc)}"` : "";
