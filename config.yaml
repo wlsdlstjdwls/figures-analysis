@@ -1,0 +1,17 @@
+# Phase1 MVP 설정 (yaml 라이브러리 없이도 읽도록 storage에서 간단 파서 사용 안 함 — 참고용 문서)
+# 실제 설정은 collectors/api/naver.py 상단 상수로 관리. 이 파일은 의도 기록용.
+
+collect:
+  source: naver
+  # 수집 검색어 (라인/IP 고정). 넨도로이드 중심 MVP.
+  queries:
+    - "넨도로이드"
+    - "넨도로이드 원신"
+    - "넨도로이드 원피스"
+  display_per_page: 100   # 네이버 최대 100
+  max_pages: 10           # query당 최대 1000건 (네이버 start 상한 1000)
+  sort: sim               # sim(정확도) | date | asc | dsc
+
+analysis:
+  group_keys: [maker, line, character]
+  outlier_iqr: true
