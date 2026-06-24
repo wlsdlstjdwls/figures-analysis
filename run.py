@@ -15,6 +15,8 @@
   python run.py danawa    # 다나와 수집 (국내 가격비교 최저가 호가, requests)
   python run.py hobbysearch # Hobby Search(1999.co.jp) 수집 (일본 새제품 정가, FlareSolverr)
   python run.py entearth  # Entertainment Earth 수집 (미국 새제품 정가, FlareSolverr)
+  python run.py solaris   # Solaris Japan 수집 (일본 피규어 새제품 정가+중고 호가 USD, requests)
+  python run.py toynk     # Toynk 수집 (미국 새제품 정가 USD, requests)
   python run.py analyze   # 분석 출력
   python run.py match     # 교차언어 상품 매칭 후보 덤프 (판정은 Claude Code가 대화로)
   python run.py group     # 상품그룹 매칭 (이관+자동블로킹+검수덤프+product_match 역생성)
@@ -78,6 +80,12 @@ def main():
     elif cmd == "entearth":
         from collectors.scrape.entearth import collect
         collect()
+    elif cmd == "solaris":
+        from collectors.scrape.solaris import collect
+        collect()
+    elif cmd == "toynk":
+        from collectors.scrape.toynk import collect
+        collect()
     elif cmd == "analyze":
         from analysis.price import run
         run()
@@ -140,6 +148,8 @@ def main():
         from collectors.scrape.suruga import collect as collect_suruga
         from collectors.scrape.hobbysearch import collect as collect_hs
         from collectors.scrape.entearth import collect as collect_ee
+        from collectors.scrape.solaris import collect as collect_solaris
+        from collectors.scrape.toynk import collect as collect_toynk
         from collectors.api.rakuten import collect as collect_rakuten
         from report.html_report import build as build_html
         init_db()
@@ -150,6 +160,7 @@ def main():
         for name, fn in (("amiami", collect_amiami), ("hlj", collect_hlj),
                          ("bbts", collect_bbts), ("suruga", collect_suruga),
                          ("hobbysearch", collect_hs), ("entearth", collect_ee),
+                         ("solaris", collect_solaris), ("toynk", collect_toynk),
                          ("rakuten", collect_rakuten)):
             try:
                 fn()

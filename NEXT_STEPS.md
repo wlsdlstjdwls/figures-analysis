@@ -1,7 +1,19 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-24(6) · **Hobby Search + Entertainment Earth 추가**(FlareSolverr 경유, 일본/미국 정가). 가동 12소스 + 라쿠텐 보류.
+> 최종 업데이트: 2026-06-24(7) · **Solaris Japan + Toynk 추가**(Shopify suggest.json, requests). 가동 **14소스** + 라쿠텐 보류.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-24 #7) — Solaris Japan + Toynk (Shopify JSON, CF/인증 불필요)
+
+### ⭐ 신규 소스 2종 (Shopify 표준 JSON, 평범 requests — FlareSolverr·Playwright 불필요)
+- 정찰: 다수 토이몰 probe → **Shopify `/search/suggest.json` + `/products/<handle>.json`** 패턴 발견. 한국몰(11st/지마켓/하비스테이션)은 curl 차단·이미 naver/danawa 커버라 제외. 만다라케/메루카리는 여전히 인프라 필요(보류 유지).
+- **Solaris Japan**(`run.py solaris`, `collectors/scrape/solaris.py`): 일본 피규어 영문몰. ⭐ **한 상품에 Brand New + Pre Owned 두 variant** → 일본 **새제품 정가 + 중고 호가**를 한 소스에서 동시(USD). amiami(새)·suruga/yahoo(중고) 보완.
+  - 2단계: suggest.json(handle 검색, limit **10 하드캡**) → products/<handle>.json(vendor=메이커·product_type·variants). `product_type=="Figure"` 또는 tags `meta-figure-`만(DVD/Book/Apparel 제외). variant id = source_item_id → 새/중고 별행. is_sold 0(매장 호가).
+  - 결과: **193행**(145상품, 새93·중고100). 괴수98·특촬66·기타19·공룡10. price_krw 전부보정, noise 0, maker(Bandai 등) 깔끔.
+- **Toynk**(`run.py toynk`, `collectors/scrape/toynk.py`): 미국 토이몰(Shopify, solaris와 동형). monsterverse(고질라x콩)·쥬라기·Funko 등 미국 새제품 정가(USD). BBTS/EE 보완. condition=new 고정(미국몰 중고없음).
+  - 결과: **37행**(68상품 중 figure필터 통과분). 괴수14·특촬10·공룡10. maker Mattel/Funko 등. ⚠️ Funko POP·잡지 일부 혼입(저빈도).
+- 배선: 각 단독 명령 + **weekly 편입**(…/entearth/**solaris/toynk**/rakuten). 둘 다 가벼운 requests라 daily도 가능하나 정가성격 → weekly 배치. 대시보드 SOURCE_KO/COLOR: solaris(초록#16a34a)·toynk(노랑#eab308). `run.py html` 재생성 13,904건.
+- 🎯 다음: `run.py group` 재실행 시 자동블로킹 합류. ⭐ **Solaris Pre Owned(일본 중고 USD) ↔ yahoo_jp/suruga(일본 중고 JPY) 교차검증** 표본. 📌 코드만 가능한 신규소스 다시 소진 — 남은 건 인프라(만다라케/메루카리) or 키(eBay).
 
 ## 이번 세션 변경 (2026-06-24 #6) — Hobby Search + Entertainment Earth (FlareSolverr)
 
@@ -144,12 +156,14 @@
 | 다나와 | `run.py danawa` | dsearch HTML | **국내 가격비교 최저가**(KRW) 602행 | daily |
 | Hobby Search | `run.py hobbysearch` | FlareSolverr(CF) + c-card | **일본 새제품 정가**(JPY) 263행 | weekly(FlareSolverr) |
 | Entertainment Earth | `run.py entearth` | FlareSolverr(CF) + data-* | **미국 새제품 정가**(USD) 301행 | weekly(FlareSolverr) |
+| Solaris Japan | `run.py solaris` | Shopify suggest+detail JSON | **일본 피규어 새제품 정가+중고 호가**(USD) 193행 | weekly |
+| Toynk | `run.py toynk` | Shopify suggest+detail JSON | **미국 새제품 정가**(USD) 37행 | weekly |
 | 라쿠텐 | `run.py rakuten` | 공식 Ichiba API | **일본 신품/중고 호가**(JPY) | ⏸ **보류**(일본폰 인증 필요) |
 | eBay | `run.py ebay` | 공식 API | 해외 호가 | ⏸ **키 발급 대기중** |
 
 **자동화 (Windows 작업 스케줄러)**:
 - `FiguresAnalysisDaily` 09:00 + `FiguresAnalysis_Daily` 20:00 — `run.py daily`(호가/실거래: naver+wyyyes+bunjang+yahoo→리포트→HTML)
-- `FiguresWeekly` — 일요일 10:00, `run.py weekly`(정가+중고: amiami+hlj+bbts+**suruga**→group→premium/pricing→HTML). ⚠️ suruga는 FlareSolverr 도커 필요(없으면 skip).
+- `FiguresWeekly` — 일요일 10:00, `run.py weekly`(정가+중고: amiami+hlj+bbts+suruga+hobbysearch+entearth+**solaris+toynk**→group→premium/pricing→HTML). ⚠️ suruga/hobbysearch/entearth는 FlareSolverr 도커 필요(없으면 skip), solaris/toynk는 평범 requests.
 - `FiguresWyyyesPoll` — 3시간마다, 와이스 낙찰가 누적
 - ⚠️ PC 켜져 있어야 실행. 24시간 원하면 VPS.
 
