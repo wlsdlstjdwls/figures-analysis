@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from analysis.premium import compute_premium, compute_product_premium
+from analysis.premium import compute_premium, compute_product_premium, JP_USED
 from storage.db import load_latest_df
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -90,11 +90,17 @@ def build(today=None):
         r["kind"] = "상품"
         r["n_list"] = 1
         r["label"] = (r["label"] or "")[:50]
+    # 일본 프리미엄(정가↔일본중고 yahoo_jp) — 상품단위 매칭
+    jp = compute_product_premium(df, used_sources=JP_USED)
+    for r in jp:
+        r["kind"] = "일본"
+        r["n_list"] = 1
+        r["label"] = (r["label"] or "")[:50]
     seg = compute_premium(df)
     for r in seg:
         r["kind"] = "세그먼트"
         r["label"] = CHAR_KO.get(r["label"], r["label"])
-    premium = prod + seg
+    premium = prod + jp + seg
 
     # 판매가 추천: 매칭 상품별 시세→권장가 (실거래 우선)
     from analysis.pricing import compute_pricing, FAST_MULT, TOP_MULT
@@ -216,6 +222,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .kbadge.seg  { background:#2a2630; color:#a78bfa; border:1px solid #3b3548; }
   .kbadge.real { background:#16351f; color:#4ade80; border:1px solid #1f5130; }
   .kbadge.ask  { background:#2a2630; color:#9ca3af; border:1px solid #3b3548; }
+  .kbadge.jp   { background:#2b1d22; color:#fb7185; border:1px solid #4a2530; }
   .premium.collapsed .prow2 { display:none; }
   /* 판매가 추천 카드: 두 추천가 */
   .precos { display:flex; gap:8px; margin-top:2px; }
@@ -423,14 +430,19 @@ setView(saved);
     const arrow = p.diff_krw>=0?"▲":"▼";
     const kindBadge = p.kind==="상품"
       ? `<span class="kbadge prod">상품</span>`
-      : `<span class="kbadge seg">세그먼트</span>`;
-    const sample = p.kind==="상품"
-      ? `표본: 중고 ${p.n_used}건 (상품단위 매칭)`
-      : `표본: 정가 ${p.n_list} · 중고 ${p.n_used}건`;
+      : (p.kind==="일본"
+        ? `<span class="kbadge jp">🇯🇵 일본</span>`
+        : `<span class="kbadge seg">세그먼트</span>`);
+    const sample = p.kind==="세그먼트"
+      ? `표본: 정가 ${p.n_list} · 중고 ${p.n_used}건`
+      : (p.kind==="일본"
+        ? `표본: 일본중고 ${p.n_used}건 (상품단위 매칭)`
+        : `표본: 중고 ${p.n_used}건 (상품단위 매칭)`);
+    const usedLabel = p.kind==="일본" ? "일본중고" : "중고";
     return `<div class="pcard2" style="--gc:${gc}">
       <div class="ptitle">${kindBadge}${esc(p.label)}${p.genre?`<span class="gbadge">${esc(p.genre)}</span>`:""}</div>
       <div class="ppct ${cls(p.premium_pct)}">${p.premium_pct}%</div>
-      <div class="pline">정가 ${won(p.list_krw)} → 중고 ${won(p.used_krw)}원 <span style="color:${p.diff_krw>=0?'#ef4444':'#22c55e'}">${arrow}${won(Math.abs(p.diff_krw))}</span></div>
+      <div class="pline">정가 ${won(p.list_krw)} → ${usedLabel} ${won(p.used_krw)}원 <span style="color:${p.diff_krw>=0?'#ef4444':'#22c55e'}">${arrow}${won(Math.abs(p.diff_krw))}</span></div>
       <div class="pn">${sample}</div>
     </div>`;
   }).join("");
@@ -455,6 +467,10 @@ setView(saved);
     const vsList = p.list_krw
       ? `정가 ${won(p.list_krw)}원 대비 <b>${p.vs_list_pct}%</b>`
       : `정가 미상`;
+    // 일본 매입시세(yahoo_jp 실거래) → 한일 직구 차익
+    const jpLine = p.jp_buy_krw
+      ? `<div class="pline">🇯🇵 일본매입 ${won(p.jp_buy_krw)}원 → 한일차익 <b style="color:${p.jp_margin_pct>=0?'#fb7185':'#22c55e'}">${p.jp_margin_pct>=0?'+':''}${p.jp_margin_pct}%</b> <span class="pn">(일본중고 ${p.n_jp}건)</span></div>`
+      : ``;
     return `<div class="pcard2" style="--gc:${gc}">
       <div class="ptitle">${bBadge}${esc(p.label)}${p.genre?`<span class="gbadge">${esc(p.genre)}</span>`:""}</div>
       <div class="pline">시세 ${won(p.market_krw)}원 · ${vsList}</div>
@@ -462,6 +478,7 @@ setView(saved);
         <div class="preco fast"><div class="lab">⚡ 빠른회전</div><div class="val">${won(p.fast_krw)}</div></div>
         <div class="preco top"><div class="lab">📈 고점</div><div class="val">${won(p.top_krw)}</div></div>
       </div>
+      ${jpLine}
       <div class="pn">${sample}</div>
     </div>`;
   }).join("");

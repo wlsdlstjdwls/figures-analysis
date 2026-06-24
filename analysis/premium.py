@@ -17,7 +17,8 @@ import pandas as pd
 from storage.db import get_conn, load_latest_df
 
 AMIAMI = ("amiami",)
-DOMESTIC_USED = ("wyyyes", "bunjang")
+DOMESTIC_USED = ("wyyyes", "bunjang")     # 국내 중고
+JP_USED = ("yahoo_jp",)                   # 일본 중고 실거래(낙찰)
 
 
 def load_matches_df():
@@ -32,18 +33,21 @@ def load_matches_df():
     return df
 
 
-def compute_product_premium(df=None, min_confidence=0.7):
+def compute_product_premium(df=None, min_confidence=0.7, used_sources=DOMESTIC_USED):
     """LLM 매칭(product_match) 기반 상품단위 프리미엄.
 
-      premium% = 국내 중고가 / 일본 정가 * 100   (매칭된 상품 쌍별)
+      premium% = 중고가 / 일본 정가 * 100   (매칭된 상품 쌍별)
 
-    같은 아미아미 상품에 국내 매물 여러 건이면 중고가는 중앙값으로 집계.
+    used_sources로 어느 진영 중고를 볼지 선택:
+      DOMESTIC_USED → 국내 프리미엄, JP_USED → 일본 프리미엄(정가 대비 일본 중고).
+    같은 아미아미 상품에 매물 여러 건이면 중고가는 중앙값으로 집계.
     매칭 테이블이 비었으면 빈 리스트 반환(→ run()이 세그먼트 근사로 폴백).
     """
     matches = load_matches_df()
     if matches.empty:
         return []
     matches = matches[matches["confidence"] >= min_confidence]
+    matches = matches[matches["used_source"].isin(used_sources)]
     if matches.empty:
         return []
 
@@ -51,7 +55,7 @@ def compute_product_premium(df=None, min_confidence=0.7):
         df = load_latest_df()
     df = df[df["price_krw"].notna()]
     amiami = df[df["source"].isin(AMIAMI)].set_index("source_item_id")
-    dom = df[df["source"].isin(DOMESTIC_USED)].set_index(["source", "source_item_id"])
+    dom = df[df["source"].isin(used_sources)].set_index(["source", "source_item_id"])
 
     rows = []
     for aid, grp in matches.groupby("amiami_item_id"):
@@ -142,16 +146,25 @@ def compute_premium(df=None, keys=("character",), min_each=3):
     return rows
 
 
+def _print_prod(prod, title):
+    print(f"\n=== {title} ===\n")
+    tbl = pd.DataFrame(prod)[["label", "list_krw", "used_krw", "premium_pct",
+                              "diff_krw", "n_used"]]
+    tbl["label"] = tbl["label"].str.slice(0, 45)
+    tbl.columns = ["상품", "정가(원)", "중고中(원)", "프리미엄%", "차익(원)", "중고n"]
+    print(tbl.to_markdown(index=False))
+    print(f"※ product_match {len(prod)}개 상품.")
+
+
 def run():
     prod = compute_product_premium()
     if prod:
-        print("\n=== 프리미엄율 (상품단위, LLM 매칭 기반) ===\n")
-        tbl = pd.DataFrame(prod)[["label", "list_krw", "used_krw", "premium_pct",
-                                  "diff_krw", "n_used"]]
-        tbl["label"] = tbl["label"].str.slice(0, 45)
-        tbl.columns = ["상품", "정가(원)", "중고中(원)", "프리미엄%", "차익(원)", "중고n"]
-        print(tbl.to_markdown(index=False))
-        print(f"\n※ product_match {len(prod)}개 상품. 매칭 추가는 python run.py match.")
+        _print_prod(prod, "국내 프리미엄율 (상품단위, 정가↔국내중고)")
+    jp = compute_product_premium(used_sources=JP_USED)
+    if jp:
+        _print_prod(jp, "일본 프리미엄율 (상품단위, 정가↔일본중고 yahoo_jp)")
+    if prod or jp:
+        print("\n※ 매칭 추가는 python run.py match.")
 
     rows = compute_premium()
     if not rows and not prod:

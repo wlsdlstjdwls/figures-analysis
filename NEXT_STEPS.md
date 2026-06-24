@@ -1,7 +1,14 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-24 · **판매가 추천 엔진(0순위) + 야후옥션JP 일본실거래(0.5순위) 추가.** 상품매칭 9건.
+> 최종 업데이트: 2026-06-24(2) · **기존기능 고도화 세션: yahoo_jp 매칭 통합 → 일본 프리미엄 + 한일차익 + 일본어 정규화.** 상품매칭 9→**30건**.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-24 #2) — 고도화 ①②③④
+- **① yahoo_jp 매칭 통합**: `JP_USED=(yahoo_jp)` 신설. `export_candidates`가 yahoo_jp 후보도 덤프(일본어라 `JP_KAIJU_TOKENS` 키워드 보완). amiami↔yahoo_jp 실제 매칭 19건 적재(GSC SSSS 소프비·MMS·이치방쿠지). product_match 11→30.
+- **②/한일차익**: `pricing.py`에 일본 매입시세(yahoo_jp 실거래 중앙값) + `jp_margin_pct`(국내시세/일본매입). 예: DYNAZENON 가규라 일본 36,595 매입→국내 69,500 = **+90%**. `premium.py`는 `used_sources` 파라미터로 국내/일본 프리미엄 둘 다 산출(`compute_product_premium(used_sources=JP_USED)`).
+- **③ 일본어 정규화**: `extract.py` CHARACTERS/GENRE_RULES에 일본어(ゴジラ·ウルトラマン·仮面ライダー·グリッドマン·怪獣8号 등) 보강. **신규 `run.py renormalize`** = 저장된 행 title_raw로 genre/character 소급 재계산. yahoo_jp 기타 **1628→3**(괴수1514·특촬299).
+- **④ 대시보드**: 💹에 🇯🇵일본 프리미엄 카드(kind=일본), 💰에 일본매입→한일차익% 라인 추가. `run.py html` 재생성 완료.
+- ⚠️ **국내 시세는 여전히 호가근거**(실거래근거 0). yahoo_jp(일본)는 매입참고로만 쓰고 국내 판매시세엔 안 섞음. 국내 실거래 비중↑ 하려면 **와이스 sold↔amiami 매칭** 필요(아래 0순위 ②).
 
 ## 현재 상태 (한눈에)
 
@@ -99,7 +106,11 @@
 
 ## 빠른 시작 (새 세션)
 ```
-python run.py daily      # 전체 수집 + 리포트 + HTML
-python run.py amiami     # 아미아미만 (Playwright)
+python run.py daily        # 전체 수집 + 리포트 + HTML
+python run.py amiami       # 아미아미만 (Playwright)
+python run.py match        # 매칭 후보 덤프 (Claude Code가 판정 → save_matches)
+python run.py renormalize  # extract 사전 보강 후 기존행 genre/character 소급 재계산
+python run.py premium      # 국내+일본 프리미엄
+python run.py pricing      # 판매가 추천 + 한일차익
 start reports/dashboard.html
 ```

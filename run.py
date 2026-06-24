@@ -54,6 +54,9 @@ def main():
     elif cmd == "match":
         from normalize.llm_match import run
         run()
+    elif cmd == "renormalize":
+        from normalize.extract import renormalize
+        renormalize()
     elif cmd == "premium":
         from analysis.premium import run
         run()

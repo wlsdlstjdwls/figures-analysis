@@ -20,7 +20,7 @@
 import pandas as pd
 
 from storage.db import load_latest_df
-from analysis.premium import load_matches_df, AMIAMI, DOMESTIC_USED
+from analysis.premium import load_matches_df, AMIAMI, DOMESTIC_USED, JP_USED
 
 # ── 가격 정책 (시세대비 위치) ──
 FAST_MULT = 1.00   # 빠른회전: 시세 중앙값 그대로
@@ -46,6 +46,7 @@ def compute_pricing(df=None, min_confidence=0.7):
     df = df[df["price_krw"].notna()]
     amiami = df[df["source"].isin(AMIAMI)].set_index("source_item_id")
     dom = df[df["source"].isin(DOMESTIC_USED)].set_index(["source", "source_item_id"])
+    jp = df[df["source"].isin(JP_USED)].set_index(["source", "source_item_id"])
 
     rows = []
     for aid, grp in matches.groupby("amiami_item_id"):
@@ -58,9 +59,16 @@ def compute_pricing(df=None, min_confidence=0.7):
         if not list_krw or list_krw <= 0:
             list_krw = None
 
-        sold, ask = [], []
+        sold, ask, jp_sold = [], [], []
         for _, m in grp.iterrows():
             key = (m["used_source"], m["used_item_id"])
+            if key in jp.index:                       # 일본 중고 실거래(매입원가 참고)
+                j = jp.loc[key]
+                if isinstance(j, pd.DataFrame):
+                    j = j.iloc[0]
+                if pd.notna(j["price_krw"]):
+                    jp_sold.append(float(j["price_krw"]))
+                continue
             if key not in dom.index:
                 continue
             d = dom.loc[key]
@@ -80,6 +88,7 @@ def compute_pricing(df=None, min_confidence=0.7):
             market = float(pd.Series(ask).median())
             basis = "호가"
 
+        jp_buy = float(pd.Series(jp_sold).median()) if jp_sold else None
         rows.append({
             "label": a["title_raw"],
             "market_krw": int(round(market)),
@@ -88,6 +97,10 @@ def compute_pricing(df=None, min_confidence=0.7):
             "top_krw": _round(market * TOP_MULT),     # 고점 추천가
             "list_krw": int(round(list_krw)) if list_krw else None,   # 일본 정가
             "vs_list_pct": round(market / list_krw * 100) if list_krw else None,
+            # 일본 매입시세(yahoo_jp 실거래) → 한일 차익 참고
+            "jp_buy_krw": int(round(jp_buy)) if jp_buy else None,
+            "jp_margin_pct": round((market - jp_buy) / jp_buy * 100) if jp_buy else None,
+            "n_jp": len(jp_sold),
             "n_sold": len(sold),
             "n_ask": len(ask),
             "genre": a.get("genre") if pd.notna(a.get("genre")) else None,
@@ -106,10 +119,11 @@ def run():
         return
     print("\n=== 판매가 추천 (매칭 상품단위, 실거래 우선) ===\n")
     tbl = pd.DataFrame(rows)[["label", "basis", "market_krw", "fast_krw",
-                              "top_krw", "vs_list_pct", "n_sold", "n_ask"]]
+                              "top_krw", "vs_list_pct", "jp_buy_krw",
+                              "jp_margin_pct", "n_sold", "n_ask"]]
     tbl["label"] = tbl["label"].str.slice(0, 40)
     tbl.columns = ["상품", "근거", "시세(원)", "빠른회전", "고점(+10%)",
-                   "정가대비%", "실거래n", "호가n"]
+                   "정가대비%", "일본매입", "한일차익%", "실거래n", "호가n"]
     print(tbl.to_markdown(index=False))
     n_real = sum(1 for r in rows if r["basis"] == "실거래")
     print(f"\n※ {len(rows)}개 상품 (실거래근거 {n_real} · 호가근거 {len(rows)-n_real}). "

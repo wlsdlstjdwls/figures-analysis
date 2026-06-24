@@ -39,24 +39,28 @@ LINES = {
 
 # ── 캐릭터/IP 사전 ───────────────────────────────────────────
 CHARACTERS = {
-    "고질라": "Godzilla", "godzilla": "Godzilla", "ゴジラ": "Godzilla", "고지라": "Godzilla",
-    "울트라맨": "Ultraman", "ultraman": "Ultraman",
-    "가메라": "Gamera", "gamera": "Gamera",
-    "가면라이더": "Kamen Rider", "kamenrider": "Kamen Rider",
-    "발탄성인": "Baltan", "발탄": "Baltan",
-    "제튼": "Zetton",
-    "고모라": "Gomora",
-    "레드킹": "Red King",
+    # 메카고질라/킹기도라 등 합성어를 ゴジラ보다 먼저 두어 우선 매칭
+    "메카고질라": "Mechagodzilla", "メカゴジラ": "Mechagodzilla",
     "킹기도라": "King Ghidorah", "기도라": "King Ghidorah",
-    "모스라": "Mothra", "mothra": "Mothra",
-    "메카고질라": "Mechagodzilla",
+    "キングギドラ": "King Ghidorah", "ギドラ": "King Ghidorah",
+    "스페이스고질라": "Space Godzilla", "スペースゴジラ": "Space Godzilla",
+    "고질라": "Godzilla", "godzilla": "Godzilla", "ゴジラ": "Godzilla", "고지라": "Godzilla",
+    "울트라맨": "Ultraman", "ultraman": "Ultraman", "ウルトラマン": "Ultraman",
+    "가메라": "Gamera", "gamera": "Gamera", "ガメラ": "Gamera",
+    "가면라이더": "Kamen Rider", "kamenrider": "Kamen Rider", "仮面ライダー": "Kamen Rider",
+    "발탄성인": "Baltan", "발탄": "Baltan", "バルタン": "Baltan",
+    "제튼": "Zetton", "ゼットン": "Zetton",
+    "고모라": "Gomora", "ゴモラ": "Gomora",
+    "레드킹": "Red King", "レッドキング": "Red King",
+    "모스라": "Mothra", "mothra": "Mothra", "モスラ": "Mothra",
     # 현행 신품 라인 (한일 겹침 노림 — 양쪽 수집 검색어 정렬용)
     "괴수8호": "Kaiju No.8", "카이주8호": "Kaiju No.8", "kaijuno8": "Kaiju No.8",
     "kaijuno.8": "Kaiju No.8", "kaiju8": "Kaiju No.8",
-    "그리드맨": "Gridman", "gridman": "Gridman",
-    "다이나제논": "Dynazenon", "dynazenon": "Dynazenon",
-    "가규라": "Gagula", "gagula": "Gagula",
-    "공룡": "Dinosaur", "다이노": "Dinosaur", "티라노": "Tyrannosaurus",
+    "怪獣8号": "Kaiju No.8", "怪獣８号": "Kaiju No.8",
+    "그리드맨": "Gridman", "gridman": "Gridman", "グリッドマン": "Gridman",
+    "다이나제논": "Dynazenon", "dynazenon": "Dynazenon", "ダイナゼノン": "Dynazenon",
+    "가규라": "Gagula", "gagula": "Gagula", "ガギュラ": "Gagula",
+    "공룡": "Dinosaur", "다이노": "Dinosaur", "티라노": "Tyrannosaurus", "恐竜": "Dinosaur",
     "쥬라기": "Jurassic", "jurassic": "Jurassic",
 }
 
@@ -66,13 +70,21 @@ GENRE_RULES = [
               "모스라", "mothra", "메카고질라", "괴수", "kaiju", "발탄", "제튼",
               "고모라", "레드킹", "데스토로이아", "데스토로이야",
               "괴수8호", "카이주8", "kaiju8", "kaijuno8", "kaijuno.8",
-              "그리드맨", "gridman", "다이나제논", "dynazenon", "가규라", "gagula"]),
+              "그리드맨", "gridman", "다이나제논", "dynazenon", "가규라", "gagula",
+              # 일본어
+              "ゴジラ", "怪獣", "ガメラ", "キングギドラ", "ギドラ", "モスラ",
+              "メカゴジラ", "バルタン", "ゼットン", "ゴモラ", "レッドキング",
+              "グリッドマン", "ダイナゼノン", "ガギュラ", "怪獣8号", "怪獣８号",
+              "東宝", "デストロイア"]),
     ("공룡", ["공룡", "다이노", "티라노", "dinosaur", "dino", "rex", "tyranno",
-              "쥬라기", "jurassic", "트리케라"]),
+              "쥬라기", "jurassic", "트리케라", "恐竜"]),
     ("특촬", ["울트라맨", "ultraman", "가면라이더", "kamenrider", "라이더",
               "특촬", "전대", "sentai", "히어로", "바이오맨", "체인지맨", "전격전대",
-              "울트라소프비", "울트라빅", "울트라"]),
-    ("괴물", ["괴물", "monster", "몬스터", "크리쳐", "creature"]),
+              "울트라소프비", "울트라빅", "울트라",
+              # 일본어
+              "ウルトラマン", "ウルトラ", "仮面ライダー", "ライダー", "円谷",
+              "特撮", "電光超人", "戦隊"]),
+    ("괴물", ["괴물", "monster", "몬스터", "크리쳐", "creature", "モンスター"]),
 ]
 
 # ── 노이즈(비-피규어) 키워드 ─────────────────────────────────
@@ -140,3 +152,30 @@ def extract_fields(title_raw):
         "condition": condition,
         "is_noise": 1 if is_noise(nos) else 0,
     }
+
+
+def renormalize():
+    """저장된 모든 행의 title_raw로 character/genre/maker/line/is_noise 재계산·UPDATE.
+
+    extract 사전을 보강한 뒤 기존 데이터에 소급 적용할 때 사용
+    (collect 안 거치고 분류만 갱신). 가격/날짜 등 원천 필드는 건드리지 않음.
+      python run.py renormalize
+    """
+    from storage.db import get_conn
+    conn = get_conn()
+    rows = conn.execute("SELECT id, title_raw FROM product_listing").fetchall()
+    changed = 0
+    for rid, title_raw in rows:
+        f = extract_fields(title_raw or "")
+        cur = conn.execute(
+            """UPDATE product_listing
+               SET character=?, genre=?, maker=COALESCE(?, maker),
+                   line=COALESCE(?, line), is_noise=?
+               WHERE id=? AND (genre IS NOT ? OR character IS NOT ?)""",
+            (f["character"], f["genre"], f["maker"], f["line"], f["is_noise"],
+             rid, f["genre"], f["character"]),
+        )
+        changed += cur.rowcount
+    conn.commit()
+    conn.close()
+    print(f"[renormalize] {len(rows)}행 검사, {changed}행 갱신.")

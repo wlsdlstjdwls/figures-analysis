@@ -24,8 +24,15 @@ from storage.db import get_conn, init_db, load_latest_df
 
 AMIAMI = ("amiami",)
 DOMESTIC_USED = ("wyyyes", "bunjang")
+JP_USED = ("yahoo_jp",)
 # 양측이 함께 존재해 매칭 가능성이 있는 genre (기타는 노이즈 커서 제외)
 OVERLAP_GENRES = ["괴수", "특촬", "공룡", "괴물"]
+# yahoo_jp는 일본어 제목이라 extract genre가 약함(대부분 기타) → 키워드로 보완 surfacing.
+JP_KAIJU_TOKENS = [
+    "ゴジラ", "怪獣", "ウルトラ", "仮面ライダー", "ライダー", "グリッドマン",
+    "ダイナゼノン", "ガメラ", "ガンダム", "ソフビ", "ムービーモンスター",
+    "東宝", "円谷", "メカゴジラ", "キングギドラ", "バルタン",
+]
 
 SCRATCH = os.path.join(
     os.environ.get("TEMP", "/tmp"), "figures_match"
@@ -48,8 +55,15 @@ def export_candidates(out_dir=None):
     a = df[(df.source.isin(AMIAMI)) & (df.genre.isin(OVERLAP_GENRES))]
     d = df[(df.source.isin(DOMESTIC_USED)) & (df.genre.isin(OVERLAP_GENRES))]
 
+    # yahoo_jp(일본 중고 실거래): genre가 overlap이거나 제목에 괴수 토큰 포함
+    yj = df[df.source.isin(JP_USED)].copy()
+    tok = yj["title_raw"].fillna("").apply(
+        lambda t: any(k in t for k in JP_KAIJU_TOKENS))
+    yj = yj[yj.genre.isin(OVERLAP_GENRES) | tok]
+
     a_path = os.path.join(out_dir, "amiami_anchors.txt")
     d_path = os.path.join(out_dir, "domestic_candidates.txt")
+    y_path = os.path.join(out_dir, "yahoo_jp_candidates.txt")
     with open(a_path, "w", encoding="utf-8") as f:
         for g in OVERLAP_GENRES:
             sub = a[a.genre == g]
@@ -65,7 +79,12 @@ def export_candidates(out_dir=None):
             for _, r in sub.iterrows():
                 f.write(f"{r['source']}:{r['source_item_id']} | {_won(r['price_krw'])}원 | "
                         f"{r['title_raw']}\n")
-    return a_path, d_path, len(a), len(d)
+    with open(y_path, "w", encoding="utf-8") as f:
+        f.write(f"\n##### YAHOO_JP 일본중고 실거래 ({len(yj)}) #####\n")
+        for _, r in yj.iterrows():
+            f.write(f"yahoo_jp:{r['source_item_id']} | {_won(r['price_krw'])}원 | "
+                    f"{r['title_raw']}\n")
+    return a_path, d_path, y_path, len(a), len(d), len(yj)
 
 
 def save_matches(matches, method="claude-code"):
@@ -104,10 +123,11 @@ def _match_count():
 
 def run():
     init_db()
-    a_path, d_path, na, nd = export_candidates()
+    a_path, d_path, y_path, na, nd, ny = export_candidates()
     print("[match] 후보 덤프 완료 (Claude Code가 읽고 같은제품 판정 → save_matches):")
     print(f"  아미아미 앵커 {na}개: {a_path}")
     print(f"  국내 중고 후보 {nd}개: {d_path}")
+    print(f"  야후옥션JP 후보 {ny}개: {y_path}")
     print(f"[match] 현재 product_match {_match_count()}건.")
     print("[match] 새 세션이면 Claude Code에게 '매칭 진행' 요청 → 두 파일 검토 후 적재.")
 
