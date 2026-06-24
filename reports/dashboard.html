@@ -25,27 +25,60 @@
           background:#0f1115; color:var(--mut); cursor:pointer; user-select:none; }
   .chip.on { background:var(--acc); color:#fff; border-color:var(--acc); }
   .cnt { color:var(--mut); font-size:12px; margin-left:auto; }
+  /* 보기모드 토글 */
+  .viewseg { display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .viewseg button { background:#0f1115; border:0; color:var(--mut); padding:9px 12px; font-size:13px;
+                    cursor:pointer; }
+  .viewseg button.on { background:var(--acc); color:#fff; }
   .wrap { padding:18px 24px 60px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:16px; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
   .pcard { background:var(--card); border:1px solid var(--line); border-radius:14px;
            overflow:hidden; text-decoration:none; color:inherit; display:flex; flex-direction:column;
-           transition:transform .08s, border-color .08s; }
-  .pcard:hover { transform:translateY(-3px); border-color:var(--acc); }
+           border-top:3px solid var(--gc,#3b82f6);
+           transition:transform .08s, border-color .08s, box-shadow .08s; }
+  .pcard:hover { transform:translateY(-3px); border-color:var(--acc); box-shadow:0 8px 22px rgba(0,0,0,.35); }
   .thumb { width:100%; aspect-ratio:1/1; background:#0c0e12; object-fit:cover; display:block; }
   .ph { width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
         color:#3a4250; font-size:34px; background:#0c0e12; }
-  .pbody { padding:11px 12px 13px; display:flex; flex-direction:column; gap:7px; }
+  .pbody { padding:11px 12px 13px; display:flex; flex-direction:column; gap:7px; min-width:0; }
   .pname { font-size:12.5px; line-height:1.45; height:36px; overflow:hidden; color:var(--txt); }
   .pprice { font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; }
   .prow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .badge { font-size:10.5px; padding:2px 7px; border-radius:6px; font-weight:600; }
   .badge.sold { background:rgba(34,197,94,.16); color:var(--sold); }
   .badge.ask { background:#222633; color:var(--ask); }
+  .gbadge { font-size:10.5px; padding:2px 8px; border-radius:6px; font-weight:600;
+            color:var(--gc,#3b82f6); background:color-mix(in srgb, var(--gc,#3b82f6) 16%, transparent); }
   .meta { font-size:11px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tagk { font-size:10.5px; color:var(--acc); background:rgba(91,141,239,.12); padding:2px 7px; border-radius:6px; }
   .more { display:block; margin:28px auto 0; padding:11px 26px; background:var(--card);
           border:1px solid var(--line); color:var(--txt); border-radius:10px; font-size:13px; cursor:pointer; }
   .empty { text-align:center; color:var(--mut); padding:60px 0; }
+
+  /* ── 보기모드: 작은 그리드(촘촘) ── */
+  body.view-grid .grid { grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:11px; }
+  body.view-grid .pname { font-size:11.5px; height:32px; }
+  body.view-grid .pprice { font-size:14.5px; }
+  body.view-grid .tagk { display:none; }
+
+  /* ── 보기모드: 리스트(가로형, 모바일 스캔용) ── */
+  body.view-list .grid { grid-template-columns:1fr; gap:10px; }
+  body.view-list .pcard { flex-direction:row; border-top:1px solid var(--line); border-left:4px solid var(--gc,#3b82f6); }
+  body.view-list .thumb, body.view-list .ph { width:96px; height:96px; aspect-ratio:auto; flex:none; }
+  body.view-list .pbody { padding:10px 14px; justify-content:center; flex:1; }
+  body.view-list .pname { height:auto; max-height:38px; }
+
+  /* ── 모바일 ── */
+  @media(max-width:640px){
+    header { padding:14px 14px; }
+    .wrap { padding:14px 14px 50px; }
+    .filters { gap:6px; }
+    .filters input, .filters select, .viewseg button { padding:10px 11px; font-size:13px; }
+    .grid { gap:11px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
+    body.view-grid .grid { grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:8px; }
+    body.view-list .thumb, body.view-list .ph { width:84px; height:84px; }
+    h1 { font-size:17px; }
+  }
 </style>
 </head>
 <body>
@@ -62,6 +95,11 @@
       <option value="price_desc">가격 높은순</option>
       <option value="price_asc">가격 낮은순</option>
     </select>
+    <div class="viewseg" id="viewSeg">
+      <button data-v="gallery" title="갤러리">▦</button>
+      <button data-v="grid" title="작은 그리드">▪▪▪</button>
+      <button data-v="list" title="리스트">☰</button>
+    </div>
   </div>
   <div class="chips" id="genreChips"></div>
 </header>
@@ -100,20 +138,26 @@ const q=document.getElementById("q"), statF=document.getElementById("statF"),
 
 const PAGE=60; let filtered=[], shown=0;
 
+// 장르별 색상 (다채로운 카드)
+const GENRE_COLOR = {"괴수":"#ef4444","공룡":"#22c55e","특촬":"#3b82f6","괴물":"#a855f7","기타":"#6b7280"};
+const gColor = g => GENRE_COLOR[g] || "#5b8def";
+
 function card(r){
+  const gc = gColor(r.genre);
   const img = r.image_url
     ? `<img class="thumb" loading="lazy" referrerpolicy="no-referrer" src="${esc(r.image_url)}" onerror="this.outerHTML='<div class=ph>🧸</div>'">`
     : `<div class="ph">🧸</div>`;
   const tags = [r.character, r.maker].filter(Boolean).map(t=>`<span class="tagk">${esc(t)}</span>`).join("");
   const badge = r.status_ko==="실거래"
     ? `<span class="badge sold">실거래</span>` : `<span class="badge ask">호가</span>`;
+  const gb = r.genre ? `<span class="gbadge">${esc(r.genre)}</span>` : "";
   const meta = [r.source_ko, r.mall_name].filter(Boolean).map(esc).join(" · ");
-  return `<a class="pcard" href="${esc(r.url||'#')}" target="_blank" rel="noopener">
+  return `<a class="pcard" style="--gc:${gc}" href="${esc(r.url||'#')}" target="_blank" rel="noopener">
     ${img}
     <div class="pbody">
       <div class="pname">${esc(r.title_raw)}</div>
       <div class="pprice">${won(r.price_krw)}<span style="font-size:12px;color:var(--mut)"> 원</span></div>
-      <div class="prow">${badge}${tags}</div>
+      <div class="prow">${badge}${gb}${tags}</div>
       <div class="meta">${meta}</div>
     </div></a>`;
 }
@@ -142,6 +186,21 @@ window.addEventListener("scroll",()=>{
   if(shown<filtered.length && window.innerHeight+window.scrollY >= document.body.offsetHeight-600) renderMore();
 });
 q.oninput=apply; srcF.onchange=apply; statF.onchange=apply; sortF.onchange=apply;
+
+// ── 보기모드 토글 (모바일 기본 갤러리, 선택 기억) ──
+const VIEWS=["gallery","grid","list"];
+const viewSeg=document.getElementById("viewSeg");
+function setView(v){
+  if(!VIEWS.includes(v)) v="gallery";
+  document.body.classList.remove("view-gallery","view-grid","view-list");
+  document.body.classList.add("view-"+v);
+  viewSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.v===v));
+  try{ localStorage.setItem("wyv", v); }catch(e){}
+}
+viewSeg.querySelectorAll("button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
+let saved="gallery"; try{ saved=localStorage.getItem("wyv")||"gallery"; }catch(e){}
+setView(saved);
+
 renderChips(); apply();
 </script>
 </body>
