@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS product_listing (
     category        TEXT,
     url             TEXT,
     image_url       TEXT,                   -- 썸네일 이미지
+    source_date     TEXT,                   -- 원본 날짜(와이스: 낙찰=거래시각 / 진행중=마감예정)
     query           TEXT,                   -- 어떤 검색어로 수집됐나
     collected_at    TEXT NOT NULL,          -- ISO8601
     UNIQUE(source, source_item_id, collected_at)

@@ -50,8 +50,9 @@ def build(today=None):
     df["maker_ko"] = df["maker"].map(lambda v: _ko(MAKER_KO, v))
     df["status_ko"] = df["is_sold"].map(lambda x: "실거래" if x == 1 else "호가")
 
+    df["sdate"] = df["source_date"].map(lambda v: str(v)[:10] if pd.notna(v) else None)
     listings = (df[["price_krw", "source_ko", "mall_name", "genre", "character_ko",
-                    "maker_ko", "status_ko", "title_raw", "url", "image_url"]]
+                    "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate"]]
                 .sort_values("price_krw", ascending=False)
                 .rename(columns={"character_ko": "character", "maker_ko": "maker"}))
     listings["price_krw"] = listings["price_krw"].astype(int)
@@ -234,7 +235,8 @@ function card(r){
   const badge = r.status_ko==="실거래"
     ? `<span class="badge sold">실거래</span>` : `<span class="badge ask">호가</span>`;
   const gb = r.genre ? `<span class="gbadge">${esc(r.genre)}</span>` : "";
-  const meta = [r.source_ko, r.mall_name].filter(Boolean).map(esc).join(" · ");
+  const dlabel = r.sdate ? (r.status_ko==="실거래" ? "거래 " : "마감 ")+r.sdate : "";
+  const meta = [r.source_ko, r.mall_name, dlabel].filter(Boolean).map(esc).join(" · ");
   return `<a class="pcard" style="--gc:${gc}" href="${esc(r.url||'#')}" target="_blank" rel="noopener">
     ${img}
     <div class="pbody">

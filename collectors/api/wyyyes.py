@@ -79,8 +79,8 @@ def collect(categories=None):
                 """INSERT OR IGNORE INTO product_listing
                    (source, source_item_id, title_raw, character, genre, maker, line,
                     scale, condition, price, currency, price_krw, is_sold, is_noise,
-                    mall_name, category, url, image_url, query, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    mall_name, category, url, image_url, source_date, query, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     "wyyyes",
                     sid,
@@ -95,6 +95,7 @@ def collect(categories=None):
                     f"wyyyes:{cat}:sold",
                     it.get("redirectUriWeb"),
                     it.get("thumbnail"),
+                    it.get("createdAt"),    # 거래(낙찰) 시각
                     f"{cat}-sold",
                     now,
                 ),
@@ -122,8 +123,8 @@ def collect(categories=None):
                 """INSERT OR IGNORE INTO product_listing
                    (source, source_item_id, title_raw, character, genre, maker, line,
                     scale, condition, price, currency, price_krw, is_sold, is_noise,
-                    mall_name, category, url, image_url, query, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    mall_name, category, url, image_url, source_date, query, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     "wyyyes",
                     it.get("_id"),
@@ -138,6 +139,7 @@ def collect(categories=None):
                     f"wyyyes:{cat}:active",
                     f"https://wyyyes.com/timeAuction/{it.get('_id')}",
                     stock.get("thumbnail"),
+                    it.get("endAt"),        # 경매 마감 예정
                     f"{cat}-active",
                     now,
                 ),

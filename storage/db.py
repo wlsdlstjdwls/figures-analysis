@@ -48,6 +48,8 @@ def init_db():
     cols = {r[1] for r in conn.execute("PRAGMA table_info(product_listing)").fetchall()}
     if "image_url" not in cols:
         conn.execute("ALTER TABLE product_listing ADD COLUMN image_url TEXT")
+    if "source_date" not in cols:
+        conn.execute("ALTER TABLE product_listing ADD COLUMN source_date TEXT")
     conn.commit()
     conn.close()
     print(f"[db] initialized at {DB_PATH}")
