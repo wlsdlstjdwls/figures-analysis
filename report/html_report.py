@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from analysis.premium import compute_premium, compute_product_premium
 from storage.db import load_latest_df
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,7 +73,7 @@ def build(today=None):
             return "거래" if sold == 1 else "마감"
         return ""
     df["datelabel"] = df.apply(_datelabel, axis=1)
-    listings = (df[["price_krw", "source_ko", "mall_name", "genre", "character_ko",
+    listings = (df[["price_krw", "source", "source_ko", "mall_name", "genre", "character_ko",
                     "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate",
                     "cond_ko", "desc", "year", "datelabel"]]
                 .sort_values("price_krw", ascending=False)
@@ -83,6 +84,18 @@ def build(today=None):
     genres = [g for g in df["genre"].dropna().unique().tolist()]
     sources = sorted(df["source_ko"].dropna().unique().tolist())
 
+    # 프리미엄율: 상품단위(LLM 매칭) 우선 + 캐릭터 세그먼트 근사(참고). 라벨 한글화.
+    prod = compute_product_premium(df)
+    for r in prod:
+        r["kind"] = "상품"
+        r["n_list"] = 1
+        r["label"] = (r["label"] or "")[:50]
+    seg = compute_premium(df)
+    for r in seg:
+        r["kind"] = "세그먼트"
+        r["label"] = CHAR_KO.get(r["label"], r["label"])
+    premium = prod + seg
+
     data = {
         "today": today,
         "total": int(len(df)),
@@ -92,6 +105,7 @@ def build(today=None):
         "median_all": int(df["price_krw"].median()),
         "genres": genres,
         "sources": sources,
+        "premium": premium,
         "listings": listings.to_dict(orient="records"),
     }
 
@@ -155,6 +169,13 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .badge.ask { background:#222633; color:var(--ask); }
   .gbadge { font-size:10.5px; padding:2px 8px; border-radius:6px; font-weight:600;
             color:var(--gc,#3b82f6); background:color-mix(in srgb, var(--gc,#3b82f6) 16%, transparent); }
+  /* 출처 뱃지 (색상=출처별) */
+  .sbadge { font-size:10.5px; padding:2px 8px; border-radius:6px; font-weight:700;
+            color:#fff; background:var(--sc,#5b8def); letter-spacing:.2px; }
+  /* 날짜 라인 */
+  .dateline { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--mut);
+              font-variant-numeric:tabular-nums; }
+  .dateline .dlbl { font-weight:600; color:#c0c6d0; }
   .meta { font-size:11px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tagk { font-size:10.5px; color:var(--acc); background:rgba(91,141,239,.12); padding:2px 7px; border-radius:6px; }
   .cbadge { font-size:10.5px; padding:2px 7px; border-radius:6px; font-weight:600;
@@ -166,6 +187,26 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .more { display:block; margin:28px auto 0; padding:11px 26px; background:var(--card);
           border:1px solid var(--line); color:var(--txt); border-radius:10px; font-size:13px; cursor:pointer; }
   .empty { text-align:center; color:var(--mut); padding:60px 0; }
+
+  /* ── 프리미엄 섹션 ── */
+  .premium { margin-bottom:22px; }
+  .premium .phead { display:flex; align-items:baseline; gap:10px; cursor:pointer; user-select:none;
+                    padding:6px 0; }
+  .premium .phead h2 { margin:0; font-size:15px; }
+  .premium .phead .pnote { color:var(--mut); font-size:11.5px; }
+  .premium .phead .caret { margin-left:auto; color:var(--mut); font-size:12px; }
+  .prow2 { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); margin-top:10px; }
+  .pcard2 { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:13px 15px;
+            border-left:4px solid var(--gc,#5b8def); }
+  .pcard2 .ptitle { font-size:14px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:7px; }
+  .pcard2 .ppct { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .pcard2 .ppct.hi { color:#ef4444; } .pcard2 .ppct.mid { color:#eab308; } .pcard2 .ppct.lo { color:var(--sold); }
+  .pcard2 .pline { font-size:11.5px; color:var(--mut); margin-top:6px; font-variant-numeric:tabular-nums; }
+  .pcard2 .pn { font-size:10.5px; color:#6b7280; margin-top:3px; }
+  .kbadge { font-size:9.5px; padding:1px 6px; border-radius:5px; font-weight:700; flex:none; }
+  .kbadge.prod { background:#16351f; color:#4ade80; border:1px solid #1f5130; }
+  .kbadge.seg  { background:#2a2630; color:#a78bfa; border:1px solid #3b3548; }
+  .premium.collapsed .prow2 { display:none; }
 
   /* ── 보기모드: 작은 그리드(촘촘) ── */
   body.view-grid .grid { grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:11px; }
@@ -204,8 +245,10 @@ _TEMPLATE = r"""<!DOCTYPE html>
     <select id="srcF"><option value="">전체 출처</option></select>
     <select id="statF"><option value="">실거래+호가</option><option value="실거래">실거래만</option><option value="호가">호가만</option></select>
     <select id="sortF">
-      <option value="price_desc">가격 높은순</option>
-      <option value="price_asc">가격 낮은순</option>
+      <option value="price_desc">💰 가격 높은순</option>
+      <option value="price_asc">💰 가격 낮은순</option>
+      <option value="date_desc">📅 최신순 (날짜)</option>
+      <option value="date_asc">📅 오래된순</option>
     </select>
     <div class="viewseg" id="viewSeg">
       <button data-v="gallery" title="갤러리">▦</button>
@@ -217,6 +260,14 @@ _TEMPLATE = r"""<!DOCTYPE html>
 </header>
 
 <div class="wrap">
+  <section class="premium collapsed" id="premiumSec" style="display:none">
+    <div class="phead" id="pHead">
+      <h2>💹 프리미엄율</h2>
+      <span class="pnote">정가(아미아미) 대비 국내 중고가 · 상품단위(LLM 매칭) + 캐릭터 세그먼트 근사</span>
+      <span class="caret" id="pCaret">▼ 펼치기</span>
+    </div>
+    <div class="prow2" id="premiumRow"></div>
+  </section>
   <div class="grid" id="grid"></div>
   <div id="emptyMsg"></div>
   <button class="more" id="moreBtn" style="display:none">더 보기</button>
@@ -253,6 +304,10 @@ const PAGE=60; let filtered=[], shown=0;
 // 장르별 색상 (다채로운 카드)
 const GENRE_COLOR = {"괴수":"#ef4444","공룡":"#22c55e","특촬":"#3b82f6","괴물":"#a855f7","기타":"#6b7280"};
 const gColor = g => GENRE_COLOR[g] || "#5b8def";
+// 출처별 색상 (뱃지)
+const SOURCE_COLOR = {"naver":"#03c75a","wyyyes":"#f59e0b","bunjang":"#ff4800",
+                      "amiami":"#e11d8f","ebay":"#0064d2"};
+const sColor = s => SOURCE_COLOR[s] || "#5b8def";
 
 function card(r){
   const gc = gColor(r.genre);
@@ -260,23 +315,27 @@ function card(r){
     ? `<img class="thumb" loading="lazy" referrerpolicy="no-referrer" src="${esc(r.image_url)}" onerror="this.outerHTML='<div class=ph>🧸</div>'">`
     : `<div class="ph">🧸</div>`;
   const tags = [r.character, r.maker].filter(Boolean).map(t=>`<span class="tagk">${esc(t)}</span>`).join("");
+  const sb = `<span class="sbadge" style="--sc:${sColor(r.source)}">${esc(r.source_ko)}</span>`;
   const badge = r.status_ko==="실거래"
     ? `<span class="badge sold">실거래</span>` : `<span class="badge ask">호가</span>`;
   const gb = r.genre ? `<span class="gbadge">${esc(r.genre)}</span>` : "";
   const yb = r.year ? `<span class="ybadge">${esc(r.year)}</span>` : "";
   const cb = r.cond_ko ? `<span class="cbadge">${esc(r.cond_ko)}</span>` : "";
-  const dlabel = r.sdate ? ((r.datelabel||"")+" "+r.sdate).trim() : "";
-  const meta = [r.source_ko, r.mall_name, dlabel].filter(Boolean).map(esc).join(" · ");
+  const dline = r.sdate
+    ? `<div class="dateline">📅 <span class="dlbl">${esc(r.datelabel||"")}</span> ${esc(r.sdate)}</div>` : "";
+  const meta = r.mall_name ? `<div class="meta">🏬 ${esc(r.mall_name)}</div>` : "";
   const desc = r.desc ? `<div class="pdesc">${esc(r.desc)}</div>` : "";
   const titleAttr = r.desc ? ` title="${esc(r.desc)}"` : "";
   return `<a class="pcard" style="--gc:${gc}" href="${esc(r.url||'#')}" target="_blank" rel="noopener"${titleAttr}>
     ${img}
     <div class="pbody">
+      <div class="prow">${sb}${badge}</div>
       <div class="pname">${esc(r.title_raw)}</div>
       <div class="pprice">${won(r.price_krw)}<span style="font-size:12px;color:var(--mut)"> 원</span></div>
-      <div class="prow">${badge}${cb}${yb}${gb}${tags}</div>
+      <div class="prow">${cb}${yb}${gb}${tags}</div>
+      ${dline}
+      ${meta}
       ${desc}
-      <div class="meta">${meta}</div>
     </div></a>`;
 }
 
@@ -286,7 +345,17 @@ function apply(){
     (!term || (r.title_raw||"").toLowerCase().includes(term) || (r.mall_name||"").toLowerCase().includes(term)) &&
     (!sf || r.source_ko===sf) && (!st || r.status_ko===st) && (!genreSel || r.genre===genreSel));
   const s=sortF.value;
-  filtered.sort((a,b)=> s==="price_asc" ? a.price_krw-b.price_krw : b.price_krw-a.price_krw);
+  filtered.sort((a,b)=>{
+    if(s==="price_asc") return a.price_krw-b.price_krw;
+    if(s==="price_desc") return b.price_krw-a.price_krw;
+    // 날짜순: 값 없는 항목은 항상 뒤로, 동일 날짜는 가격 높은순
+    const da=a.sdate||"", db=b.sdate||"";
+    if(!da && !db) return b.price_krw-a.price_krw;
+    if(!da) return 1;
+    if(!db) return -1;
+    if(da===db) return b.price_krw-a.price_krw;
+    return s==="date_asc" ? (da<db?-1:1) : (da<db?1:-1);
+  });
   shown=0; grid.innerHTML="";
   const cnt=document.getElementById("cnt"); if(cnt) cnt.textContent=`${filtered.length.toLocaleString()}건`;
   emptyMsg.innerHTML = filtered.length ? "" : `<div class="empty">검색 결과 없음</div>`;
@@ -318,6 +387,35 @@ function setView(v){
 viewSeg.querySelectorAll("button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
 let saved="gallery"; try{ saved=localStorage.getItem("wyv")||"gallery"; }catch(e){}
 setView(saved);
+
+// ── 프리미엄 섹션 렌더 ──
+(function(){
+  const sec=document.getElementById("premiumSec");
+  if(!D.premium || !D.premium.length) return;
+  sec.style.display="";
+  const cls = p => p>=200?"hi":(p>=100?"mid":"lo");
+  document.getElementById("premiumRow").innerHTML = D.premium.map(p=>{
+    const gc=gColor(p.genre);
+    const arrow = p.diff_krw>=0?"▲":"▼";
+    const kindBadge = p.kind==="상품"
+      ? `<span class="kbadge prod">상품</span>`
+      : `<span class="kbadge seg">세그먼트</span>`;
+    const sample = p.kind==="상품"
+      ? `표본: 중고 ${p.n_used}건 (상품단위 매칭)`
+      : `표본: 정가 ${p.n_list} · 중고 ${p.n_used}건`;
+    return `<div class="pcard2" style="--gc:${gc}">
+      <div class="ptitle">${kindBadge}${esc(p.label)}${p.genre?`<span class="gbadge">${esc(p.genre)}</span>`:""}</div>
+      <div class="ppct ${cls(p.premium_pct)}">${p.premium_pct}%</div>
+      <div class="pline">정가 ${won(p.list_krw)} → 중고 ${won(p.used_krw)}원 <span style="color:${p.diff_krw>=0?'#ef4444':'#22c55e'}">${arrow}${won(Math.abs(p.diff_krw))}</span></div>
+      <div class="pn">${sample}</div>
+    </div>`;
+  }).join("");
+  const head=document.getElementById("pHead"), caret=document.getElementById("pCaret");
+  let open=false; try{ open=localStorage.getItem("wyp")==="1"; }catch(e){}
+  const sync=()=>{ sec.classList.toggle("collapsed",!open); caret.textContent=open?"▲ 접기":"▼ 펼치기"; };
+  head.onclick=()=>{ open=!open; sync(); try{localStorage.setItem("wyp",open?"1":"0");}catch(e){} };
+  sync();
+})();
 
 renderChips(); apply();
 </script>

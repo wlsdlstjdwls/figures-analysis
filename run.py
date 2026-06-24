@@ -8,6 +8,8 @@
   python run.py bunjang   # 번개장터 수집 (국내 중고 호가)
   python run.py amiami    # 아미아미 수집 (일본 정가+발매일+바코드, Playwright)
   python run.py analyze   # 분석 출력
+  python run.py match     # 교차언어 상품 매칭 후보 덤프 (판정은 Claude Code가 대화로)
+  python run.py premium   # 프리미엄율 (매칭 있으면 상품단위, 없으면 세그먼트 근사)
   python run.py timeseries# 시계열 추이 (누적 데이터 필요)
   python run.py report    # 주간 마크다운 리포트 생성
   python run.py html      # HTML 대시보드 생성 (reports/dashboard.html)
@@ -43,6 +45,12 @@ def main():
         collect()
     elif cmd == "analyze":
         from analysis.price import run
+        run()
+    elif cmd == "match":
+        from normalize.llm_match import run
+        run()
+    elif cmd == "premium":
+        from analysis.premium import run
         run()
     elif cmd == "timeseries":
         from analysis.timeseries import run

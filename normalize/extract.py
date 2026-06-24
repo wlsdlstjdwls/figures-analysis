@@ -50,6 +50,12 @@ CHARACTERS = {
     "킹기도라": "King Ghidorah", "기도라": "King Ghidorah",
     "모스라": "Mothra", "mothra": "Mothra",
     "메카고질라": "Mechagodzilla",
+    # 현행 신품 라인 (한일 겹침 노림 — 양쪽 수집 검색어 정렬용)
+    "괴수8호": "Kaiju No.8", "카이주8호": "Kaiju No.8", "kaijuno8": "Kaiju No.8",
+    "kaijuno.8": "Kaiju No.8", "kaiju8": "Kaiju No.8",
+    "그리드맨": "Gridman", "gridman": "Gridman",
+    "다이나제논": "Dynazenon", "dynazenon": "Dynazenon",
+    "가규라": "Gagula", "gagula": "Gagula",
     "공룡": "Dinosaur", "다이노": "Dinosaur", "티라노": "Tyrannosaurus",
     "쥬라기": "Jurassic", "jurassic": "Jurassic",
 }
@@ -58,7 +64,9 @@ CHARACTERS = {
 GENRE_RULES = [
     ("괴수", ["고질라", "godzilla", "고지라", "가메라", "gamera", "킹기도라", "기도라",
               "모스라", "mothra", "메카고질라", "괴수", "kaiju", "발탄", "제튼",
-              "고모라", "레드킹", "데스토로이아", "데스토로이야"]),
+              "고모라", "레드킹", "데스토로이아", "데스토로이야",
+              "괴수8호", "카이주8", "kaiju8", "kaijuno8", "kaijuno.8",
+              "그리드맨", "gridman", "다이나제논", "dynazenon", "가규라", "gagula"]),
     ("공룡", ["공룡", "다이노", "티라노", "dinosaur", "dino", "rex", "tyranno",
               "쥬라기", "jurassic", "트리케라"]),
     ("특촬", ["울트라맨", "ultraman", "가면라이더", "kamenrider", "라이더",

@@ -41,3 +41,21 @@ CREATE TABLE IF NOT EXISTS fx_rate (
     rate        REAL NOT NULL,              -- 1 base = rate KRW
     PRIMARY KEY (date, base, quote)
 );
+
+-- LLM(Claude) 교차언어 상품 매칭 결과.
+-- 아미아미(일본 정가, 영문 제목) ↔ 국내 중고(와이스/번개, 한글 제목)를
+-- 같은 제품으로 묶는다. 바코드 없는 중고를 Claude가 제목/제조사로 판정.
+-- 상품단위 프리미엄·한일가격차·괴리 분석의 기반 (PLAN §2.3 3차).
+CREATE TABLE IF NOT EXISTS product_match (
+    amiami_item_id  TEXT NOT NULL,          -- amiami gcode (정가 앵커)
+    used_source     TEXT NOT NULL,          -- wyyyes / bunjang
+    used_item_id    TEXT NOT NULL,          -- 국내 중고 source_item_id
+    confidence      REAL,                   -- 0..1, Claude 판정 신뢰도
+    reason          TEXT,                   -- 매칭 근거 (검수용)
+    method          TEXT,                   -- 'llm:claude-opus-4-8' 등
+    created_at      TEXT NOT NULL,          -- ISO8601
+    PRIMARY KEY (amiami_item_id, used_source, used_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_amiami ON product_match(amiami_item_id);
+CREATE INDEX IF NOT EXISTS idx_match_used   ON product_match(used_source, used_item_id);

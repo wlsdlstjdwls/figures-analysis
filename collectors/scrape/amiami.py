@@ -21,6 +21,11 @@ IMG_BASE = "https://img.amiami.com"
 QUERIES = [
     "godzilla sofubi", "ultraman sofubi", "kaiju sofubi", "gamera sofubi",
     "kamen rider sofubi", "sofubi", "soft vinyl kaiju",
+    # ── 한일 겹침 정렬 (국내 naver/bunjang 라인과 동일 제품 노림, KEEP IN SYNC) ──
+    "SSSS.GRIDMAN sofubi", "SSSS.DYNAZENON sofubi", "kaiju no.8 sofubi",
+    "movie monster godzilla", "shin godzilla sofubi", "godzilla minus one sofubi",
+    "ichiban kuji godzilla", "ichiban kuji kamen rider", "ultra big sofubi",
+    "x-plus godzilla",
 ]
 PAGEMAX = 50
 MAX_PAGES = 3          # query당 최대 150건
@@ -71,7 +76,13 @@ def collect(queries=None):
         for q in queries:
             page_total = 0
             for page in range(1, MAX_PAGES + 1):
-                data = _fetch_page(pg, q, page)
+                try:
+                    data = _fetch_page(pg, q, page)
+                except Exception as e:
+                    # CF 일시 차단/네트워크로 fetch 실패 → 해당 쿼리 스킵(전체 중단 X)
+                    print(f"[amiami] '{q}' p{page} fetch 실패: {str(e).splitlines()[0]}")
+                    pg.wait_for_timeout(1500)
+                    break
                 if data.get("error"):
                     print(f"[amiami] '{q}' p{page} -> HTTP {data['error']}")
                     break
