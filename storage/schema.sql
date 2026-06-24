@@ -59,3 +59,36 @@ CREATE TABLE IF NOT EXISTS product_match (
 
 CREATE INDEX IF NOT EXISTS idx_match_amiami ON product_match(amiami_item_id);
 CREATE INDEX IF NOT EXISTS idx_match_used   ON product_match(used_source, used_item_id);
+
+-- ── 상품그룹 (source 무관 "같은 제품" 단위) ──────────────────────
+-- product_match(아미아미 앵커 한 방향)의 일반화. 어느 사이트 매물이든
+-- 같은 제품이면 하나의 group_id로 묶는다 → 새↔새 / 중고↔중고 / 새↔중고
+-- 모든 비교가 그룹 단위로 가능. 새 사이트가 들어와도 group 재실행만 하면 됨.
+CREATE TABLE IF NOT EXISTS product_group (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    canonical     TEXT,                 -- 대표 제품명 (보통 아미아미 영문)
+    character     TEXT,
+    maker         TEXT,
+    line          TEXT,
+    year          TEXT,                 -- 식별 연식 토큰 (예: 2019)
+    barcode       TEXT,                 -- 있으면 강한 매칭 키
+    anchor_source TEXT,                 -- 대표 출처 (보통 amiami)
+    anchor_item_id TEXT,                -- 대표 source_item_id
+    created_at    TEXT NOT NULL
+);
+
+-- 매물 → 그룹 매핑. 매물 하나는 그룹 하나에만 속한다.
+CREATE TABLE IF NOT EXISTS listing_group (
+    source         TEXT NOT NULL,
+    source_item_id TEXT NOT NULL,
+    group_id       INTEGER NOT NULL,
+    confidence     REAL,                -- 0..1 매칭 신뢰도
+    method         TEXT,                -- 'auto:blocking' / 'claude-code' / 'seed:product_match'
+    reason         TEXT,                -- 매칭 근거 (검수용)
+    created_at     TEXT NOT NULL,
+    PRIMARY KEY (source, source_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lgroup_group ON listing_group(group_id);
+CREATE INDEX IF NOT EXISTS idx_pgroup_char  ON product_group(character, maker);
+CREATE INDEX IF NOT EXISTS idx_pgroup_anchor ON product_group(anchor_source, anchor_item_id);

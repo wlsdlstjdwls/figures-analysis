@@ -10,6 +10,7 @@
   python run.py yahoo     # 야후옥션 재팬 (일본 중고 낙찰가=실거래 + 호가)
   python run.py analyze   # 분석 출력
   python run.py match     # 교차언어 상품 매칭 후보 덤프 (판정은 Claude Code가 대화로)
+  python run.py group     # 상품그룹 매칭 (이관+자동블로킹+검수덤프+product_match 역생성)
   python run.py premium   # 프리미엄율 (매칭 있으면 상품단위, 없으면 세그먼트 근사)
   python run.py pricing   # 판매가 추천 (매칭 상품별 시세→권장가, 실거래 우선)
   python run.py timeseries# 시계열 추이 (누적 데이터 필요)
@@ -53,6 +54,9 @@ def main():
         run()
     elif cmd == "match":
         from normalize.llm_match import run
+        run()
+    elif cmd == "group":
+        from normalize.grouping import run
         run()
     elif cmd == "renormalize":
         from normalize.extract import renormalize

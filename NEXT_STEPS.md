@@ -1,7 +1,33 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-24(2) · **기존기능 고도화 세션: yahoo_jp 매칭 통합 → 일본 프리미엄 + 한일차익 + 일본어 정규화.** 상품매칭 9→**30건**.
+> 최종 업데이트: 2026-06-24(3) · **반자동 상품그룹 매처 구축 세션: source 무관 상품그룹 일반화 + 자동 블로킹.** 매칭 30→**46건**(수동) + 자동 100건 그룹화.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-24 #3) — 상품그룹 매처 + 대시보드 레이아웃
+
+### ⭐ 핵심: 반자동 상품그룹 매처 신규 (`run.py group`)
+- **동기**: 사용자가 "아무 상품이나 클릭 → 그 상품 시세비교(새↔새/중고↔중고/새↔중고)" 원함. 기존 `product_match`는 amiami 한 방향 앵커뿐 → 일반화 필요. naver 25k는 손매칭 불가 → 반자동 필요.
+- **신규 테이블** (`storage/schema.sql`): `product_group`(source 무관 "같은 제품" 단위) + `listing_group`(매물→그룹 매핑). init_db가 자동 생성(IF NOT EXISTS).
+- **신규 모듈** `normalize/grouping.py` + `run.py group` — 파이프라인:
+  1. `migrate_from_matches` — 기존 product_match → 그룹 이관(멱등)
+  2. `auto_block` — character+maker+연식(+라인/상/바코드) **고정밀 자동 그룹화**. 재실행 시 `auto:blocking`분만 삭제·재계산(수동/seed/anchor 보존)
+  3. `export_review` — 자동임계(0.8) 미달·0.55↑ 후보를 `%TEMP%/figures_match/group_review.txt`로 덤프(검수용)
+  4. `regenerate_product_match` — 그룹→product_match **역생성(중고 매물만)** → 기존 premium/pricing/dashboard 무수정 호환
+- **정밀도 가드**(중요, `_score`): ① 묶음/일괄(`BUNDLE_TOKENS`) 제외 ② **라인마커 양성확인**(`LINE_MARKERS`) — 앵커가 무비몬스터면 후보도 무비몬스터 명시 必. 몬스터아츠/이치반쿠지/타마시/반프레스토/가챠/데포리얼 혼입 차단. (고질라2023처럼 character+maker+연식이 같아도 제품군 수십종인 케이스 방어)
+- **결과**: 그룹 24개 / 멤버 168(자동100+이관44+앵커24), naver·bunjang·yahoo·amiami 교차. 상품단위 프리미엄 국내14+일본11종(이전 12+9). naver 신품도 묶임 → **새↔새 비교 토대 확보**(아직 화면 미노출).
+- **새 사이트 추가 시**: `run.py group` 재실행만. 매칭 영구저장+수동분 보존+자동분만 갱신 → 전체 재작업 X.
+- ⚠️ **상속 노이즈**: 옛 product_match seed 일부 오매칭(예 yahoo "モスラ幼虫 テストショット" 1.4M) 남아있음. 자동매처 산물 아님(자동은 정상 거부). seed 재검 필요.
+- **수동 매칭 추가**: bunjang↔amiami 16건 직접 적재(가규라·제일복권 모스라/메카고질라·신가면라이더 A상·무비몬스터 1954/울티마 등) → 30→46.
+
+### 대시보드 레이아웃 변경 (`report/html_report.py` + `reports/dashboard.html` 둘 다 패치)
+- `.filters` 세로 배치: 검색창 한 줄 전체 → 아래 줄 `.ftools`(필터·정렬 + 보기토글) → **건수(`#cntTop`) 같은 줄 맨 오른쪽**(margin-left:auto). 건수는 chips바에서 빼고 `#cntTop`으로 이동.
+- ⚠️ `dashboard.html`은 직접 패치했으나, 다음 `run.py html` 재생성 시 템플릿(.py 패치본)에서 다시 나옴(일관).
+
+### 다음 세션 할일 (이 순서 권장)
+1. **검수 패스로 매칭 키우기** (recall↑): `%TEMP%/figures_match/group_review.txt`(1,377앵커) 열어서 Claude가 같은제품 판정. 특히 **naver가 라인 미표기라 자동 탈락한 정상 매물** 다수. ⚠️ **선행작업**: `grouping.py`에 그룹용 수동 저장 헬퍼 추가 필요(현재 `llm_match.save_matches`는 product_match 전용. listing_group에 직접 넣고 anchor 그룹에 붙이는 `assign_to_group(source,item_id,anchor_item_id,conf,reason)` 같은 함수 만들 것). 저장 후 `regenerate_product_match` 재실행.
+2. **비교 UI**: 카드 클릭 → 그룹 멤버를 새/중고·사이트별로 보여주는 모달. `html_report.py`에서 `product_group`+`listing_group` 조인해 `D.groups`(상품→멤버 가격리스트) 주입 후 카드 onclick 모달 렌더. 이게 사용자가 원한 "클릭→시세비교" 본체.
+3. **옛 seed 노이즈 정리**: 상속 오매칭(테스트샷 등) 제거 또는 신뢰도 하향.
+4. **자동화**: `run.py daily`에 `renormalize`+`group` 추가(매일 자동 재그룹). 단 자동화 변경은 사용자 확인 후.
 
 ## 이번 세션 변경 (2026-06-24 #2) — 고도화 ①②③④
 - **① yahoo_jp 매칭 통합**: `JP_USED=(yahoo_jp)` 신설. `export_candidates`가 yahoo_jp 후보도 덤프(일본어라 `JP_KAIJU_TOKENS` 키워드 보완). amiami↔yahoo_jp 실제 매칭 19건 적재(GSC SSSS 소프비·MMS·이치방쿠지). product_match 11→30.
