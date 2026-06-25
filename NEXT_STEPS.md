@@ -1,7 +1,21 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-24(7) · **Solaris Japan + Toynk 추가**(Shopify suggest.json, requests). 가동 **14소스** + 라쿠텐 보류.
+> 최종 업데이트: 2026-06-25(8) · **검수 패스 매칭 확대**(`assign_to_group` 헬퍼 + 수동 8건). 가동 14소스.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-25 #8) — 검수 패스 매칭 확대 (NEXT_STEPS #1 착수)
+
+### ⭐ 그룹 수동 저장 헬퍼 `assign_to_group` 신규 (`normalize/grouping.py`)
+- 시그니처 `assign_to_group(conn, assignments, anchor_source=AMIAMI, method="manual:review")`. assignments=`[(cand_source, cand_item_id, anchor_item_id, conf, reason), ...]`.
+- 앵커(amiami) 그룹 없으면 앵커 행으로 생성→후보 멤버 등록. **method=manual:review = `_add_member` protect 대상** → `run.py group` 재실행(auto 재계산)에도 보존(검증 완료). auto:blocking 잡힌 후보는 수동으로 승격.
+- NEXT_STEPS #1 선행작업(grouping.py에 그룹용 수동저장 헬퍼)이었던 것 — 이제 완료. llm_match.save_matches(product_match 전용)와 별개로 listing_group 직접 적재.
+
+### ⭐ 검수 매칭 8건 적재 (group_review.txt 1379앵커 정독)
+- 덤프 구조: 157앵커 × **58 고유후보**(char+maker+line만 같으면 모든 앵커 중복노출 → 후보별 진짜 앵커 1개 찾는 작업). 대다수가 캔디토이 10팩 BOX·CCP Furusou·울트라괴수 개별·신고질라 제네릭 = **제품 불일치**라 보수적 제외(오매칭=premium 오염 위험).
+- 확정 8건: bunjang:412971833→FIGURE-193442(비오란테=Giga Biollante), danawa:EE128_4741612565→FIGURE-031643(디스트로이어), danawa:32942942→FIGURE-046153(모스라2019), naver:60397608539·90559086532→FIGURE-029389-R(반프레 토루파카 신고질라 동결ver), naver:59959696647·59591129182→GOODS-04330781(엔스카이 퍼펫마스코트2), naver:88478293452→GOODS-04604316(마스코트1탄).
+- 결과: product_group 26→**31**, listing_group→221(manual:review 8), product_match 역생성 44→**45**(bunjang 중고 1건 추가, 나머지는 naver/danawa 신품→그룹비교용·product_match 미편입 by design). pricing 상품 14→**15**. premium/pricing/html 재생성.
+- ⚠️ solaris Gridman 후보는 **SSSS.GRIDMAN(앵커) ≠ 덴코초진 그리드맨(후보)** 다른 캐릭터라 제외. 신규 USD소스는 amiami(JP) 앵커와 교차가 적어 검수덤프 기여 미미(예상대로).
+- 🎯 **다음**: 검수덤프 잔여 1373앵커 대부분 진짜 매칭 없음(캔디토이/제네릭). 추가 recall은 ① 앵커 측을 amiami 외(hlj/bbts/solaris 정가)로도 확장 ② naver 25k 중 라인 명시 매물 타게팅. 핵심요구 **비교 UI(카드클릭→그룹멤버 모달)** 아직 미착수 — 우선순위 높음.
 
 ## 이번 세션 변경 (2026-06-24 #7) — Solaris Japan + Toynk (Shopify JSON, CF/인증 불필요)
 

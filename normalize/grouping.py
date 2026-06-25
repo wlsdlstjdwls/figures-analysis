@@ -317,6 +317,29 @@ def export_review(conn, out_dir=None, limit=400):
     return path, len(lines)
 
 
+def assign_to_group(conn, assignments, anchor_source=AMIAMI, method="manual:review"):
+    """검수 패스 수동 매칭 일괄 적용.
+
+    assignments: [(cand_source, cand_item_id, anchor_item_id, conf, reason), ...]
+    앵커(amiami) 그룹이 없으면 앵커 행으로 생성하고 후보를 멤버로 붙인다.
+    method=manual:review 는 _add_member protect 대상 → 이후 `run.py group`(auto 재계산)
+    재실행에도 보존된다. auto:blocking 으로 잡혀있던 후보는 수동 매칭으로 승격(덮어쓰기).
+    """
+    df = load_latest_df()
+    amiami = {r["source_item_id"]: r for _, r in df[df.source == anchor_source].iterrows()}
+    n = 0
+    for cs, cid, aid, conf, reason in assignments:
+        a = amiami.get(aid)
+        if a is None:
+            print(f"[assign] 앵커 없음(최신 스냅샷에 amiami {aid} 부재) → skip")
+            continue
+        gid = _ensure_group(conn, anchor_source, aid, _sig(a), a.get("title_raw"))
+        if _add_member(conn, cs, str(cid), gid, conf, method, reason):
+            n += 1
+    conn.commit()
+    return n
+
+
 def regenerate_product_match(conn):
     """그룹 → product_match 역생성 (중고 매물만). 기존 premium/pricing/dashboard 호환."""
     # 이전 자동 역생성분만 제거(수동 product_match 보존)
