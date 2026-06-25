@@ -63,6 +63,17 @@ def _line_marker(title):
     return None
 
 
+def _marker_conflict(anchor_title, cand_title):
+    """앵커와 후보의 라인마커 충돌 여부. _score 와 동일 규칙:
+    앵커가 라인 명시면 후보도 같은 라인 명시 必, 앵커 무라인인데 후보가 특정 라인이면 충돌."""
+    am, cm = _line_marker(anchor_title), _line_marker(cand_title)
+    if am and cm and am != cm:
+        return True
+    if not am and cm:
+        return True
+    return False
+
+
 def _is_bundle(title):
     nos = _despace(title)
     return any(_despace(k) in nos for k in BUNDLE_TOKENS)
@@ -205,6 +216,8 @@ def migrate_from_matches(conn):
     """기존 product_match → 그룹으로 이관 (멱등). 아미아미 앵커별 그룹 생성."""
     df = load_latest_df()
     amiami = {r["source_item_id"]: r for _, r in df[df.source == AMIAMI].iterrows()}
+    used = {(r["source"], r["source_item_id"]): r
+            for _, r in df[df.source != AMIAMI].iterrows()}
     matches = conn.execute(
         "SELECT amiami_item_id, used_source, used_item_id, confidence, reason, method "
         "FROM product_match"
@@ -216,6 +229,11 @@ def migrate_from_matches(conn):
         if a is None:
             continue
         sig = _sig(a)
+        # 라인마커 충돌(옛 seed 오매칭: MMS 앵커에 SHMA/쿠지 등) 차단
+        cand = used.get((m["used_source"], m["used_item_id"]))
+        if cand is not None and _marker_conflict(a.get("title_raw"),
+                                                 cand.get("title_raw")):
+            continue
         gid = _ensure_group(conn, AMIAMI, aid, sig, a.get("title_raw"))
         n_groups += 1
         if _add_member(conn, m["used_source"], m["used_item_id"], gid,
@@ -340,6 +358,63 @@ def assign_to_group(conn, assignments, anchor_source=AMIAMI, method="manual:revi
     return n
 
 
+def prune_conflicts(conn):
+    """앵커 라인마커와 충돌하는 비검증 멤버를 listing_group·product_match 양쪽에서 제거.
+
+    옛 seed 오매칭(예: 무비몬스터 앵커 그룹에 S.H.몬스터아츠·이치방쿠지 매물 혼입)을 청소.
+    method='anchor'·'manual:review'(사람 검증)는 보존, auto/seed 만 대상.
+    product_match 까지 지워야 다음 migrate_from_matches 재실행에도 부활하지 않음(durable).
+    """
+    df = load_latest_df()
+    titles = {(r["source"], r["source_item_id"]): (r.get("title_raw") or "")
+              for _, r in df.iterrows()}
+    groups = conn.execute(
+        "SELECT id, anchor_source, anchor_item_id, canonical FROM product_group"
+    ).fetchall()
+    removed = []
+    for g in groups:
+        atitle = g["canonical"] or titles.get(
+            (g["anchor_source"], g["anchor_item_id"]), "")
+        mems = conn.execute(
+            "SELECT source, source_item_id, method FROM listing_group WHERE group_id=?",
+            (g["id"],),
+        ).fetchall()
+        for m in mems:
+            meth = m["method"] or ""
+            if meth == "anchor" or meth.startswith("manual"):
+                continue
+            ctitle = titles.get((m["source"], m["source_item_id"]), "")
+            if not _marker_conflict(atitle, ctitle):
+                continue
+            conn.execute(
+                "DELETE FROM listing_group WHERE source=? AND source_item_id=? AND group_id=?",
+                (m["source"], m["source_item_id"], g["id"]),
+            )
+            conn.execute(
+                "DELETE FROM product_match WHERE used_source=? AND used_item_id=?",
+                (m["source"], m["source_item_id"]),
+            )
+            removed.append((g["id"], m["source"], m["source_item_id"]))
+
+    # product_match 직접 스캔: migrate 가드로 listing_group 엔 안 들어왔지만
+    # 남아있는 충돌 행(고아)도 제거 → premium/pricing 오염 방지
+    anchor_title = {r["source_item_id"]: (r.get("title_raw") or "")
+                    for _, r in df[df.source == AMIAMI].iterrows()}
+    for pm in conn.execute(
+        "SELECT amiami_item_id, used_source, used_item_id FROM product_match"
+    ).fetchall():
+        atitle = anchor_title.get(pm["amiami_item_id"], "")
+        ctitle = titles.get((pm["used_source"], pm["used_item_id"]), "")
+        if atitle and _marker_conflict(atitle, ctitle):
+            conn.execute(
+                "DELETE FROM product_match WHERE amiami_item_id=? AND used_source=? AND used_item_id=?",
+                (pm["amiami_item_id"], pm["used_source"], pm["used_item_id"]),
+            )
+            removed.append(("pm", pm["used_source"], pm["used_item_id"]))
+    conn.commit()
+    return removed
+
+
 def regenerate_product_match(conn):
     """그룹 → product_match 역생성 (중고 매물만). 기존 premium/pricing/dashboard 호환."""
     # 이전 자동 역생성분만 제거(수동 product_match 보존)
@@ -385,6 +460,9 @@ def run():
     print(f"[group] 이관: product_match 앵커 {ng}건, 멤버 {nm}건")
     asg, amb = auto_block(conn)
     print(f"[group] 자동: {asg}건 그룹화, 모호 보류 {amb}건")
+    pruned = prune_conflicts(conn)
+    if pruned:
+        print(f"[group] 라인충돌 정리: {len(pruned)}건 제거 {pruned}")
     path, nanchor = export_review(conn)
     print(f"[group] 검수 후보 {nanchor}개 앵커: {path}")
     npm = regenerate_product_match(conn)

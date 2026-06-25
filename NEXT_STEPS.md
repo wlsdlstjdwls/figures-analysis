@@ -1,7 +1,21 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-25(10) · **사이트 +2 (Galactic Toys·Toyshnip, Shopify JSON USD)**. 가동 **18소스**.
+> 최종 업데이트: 2026-06-25(11) · **매칭 검수 +3 · grouping 라인변형 분리 정밀화(prune_conflicts)**. 가동 18소스.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-25 #11) — 매칭 검수 확대 + grouping 정밀화
+
+### ⭐ grouping 라인변형 분리 (`normalize/grouping.py`)
+- 진단: group#21(MMS 고질라2023) 82멤버 중 auto:blocking 78건은 전부 **무비몬스터 명시 = 정상**. 오염은 **옛 seed 2건**(method=seed:product_match): group#19에 이치방쿠지 고질라1991, group#21에 S.H.몬스터아츠 고질라-1.0 → 앵커(무비몬스터)와 **다른 라인** 혼입.
+- **`_marker_conflict(anchor_title, cand_title)`** 신규 — `_score`와 동일 규칙(앵커 라인명시면 후보도 같은 라인 명시 必, 앵커 무라인+후보 특정라인=충돌)을 함수화.
+- **`prune_conflicts(conn)`** 신규 — 앵커 라인마커와 충돌하는 비검증 멤버를 **listing_group·product_match 양쪽**에서 삭제(anchor·manual:review는 보존). ⚠️ **양쪽 다 지워야 durable**: product_match가 migrate→regenerate로 **순환 재생성**(현재 product_match 전부 group:seed:*/group:manual:*)되므로 한쪽만 지우면 부활. product_match 고아행도 직접 스캔 삭제(premium 오염 방지).
+- **migrate_from_matches 가드** — 이관 시 라인충돌 후보는 애초에 skip(`used` dict 추가). `run()`에 prune 단계 편입(auto_block 다음). 검증: 재실행 후 listing_group 라인충돌 **0건**.
+
+### ⭐ 검수 매칭 +3 (fork로 1527줄 정독 → 보수적 판정 → 내가 DB검증 후 적재)
+- group_review.txt 155앵커(후보보유) 전부 판정. **대다수 제외**: 캔디토이 10팩 BOX 앵커 vs 개별 소프비 후보(제품 불일치)·제네릭("반다이 울트라맨 소프비")·라인/연식 애매. 오매칭=premium 오염이라 보수적.
+- 확정 3건(전부 정확일치 DB검증): naver:88478503622·89016953115→GOODS-04330781(엔스카이 퍼펫마스코트 vol.2 10팩BOX), cmdstore:44419805511895→FIGURE-046151(MMS 킹기도라2019). ⚠️ 마지막 건은 덤프상 엉뚱앵커(메카고질라) 아래 떴으나 fork가 올바른 킹기도라 앵커로 재배정.
+- 결과: product_group 31→**32**(킹기도라 앵커 신규), listing_group manual:review 8→**11**. premium/pricing/html 재생성(대시보드 **15,203건**). 신규 3건은 naver/cmdstore=새제품 소스라 product_match/pricing 미편입(by design), **비교UI 그룹(30 퍼펫마스코트·32 킹기도라)에만 반영**.
+- 🎯 다음: 검수덤프 잔여는 거의 진짜매칭 없음(캔디토이/제네릭). recall 추가는 ① 앵커를 amiami 외 hlj/bbts/solaris 정가로 확장 ② naver 라인명시 매물 타게팅. grouping은 라인충돌 청소 완료, 남은 미세이슈=**같은 라인 내 다른 서브괴수**(예 group#21 "고질라샵 한정 메가로" 1건, 저영향).
 
 ## 이번 세션 변경 (2026-06-25 #10) — 사이트 확장 (Galactic Toys + Toyshnip, Shopify JSON USD)
 
