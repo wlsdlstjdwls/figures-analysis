@@ -39,13 +39,41 @@ LINES = {
 
 # ── 캐릭터/IP 사전 ───────────────────────────────────────────
 CHARACTERS = {
-    # 메카고질라/킹기도라 등 합성어를 ゴジラ보다 먼저 두어 우선 매칭
-    "메카고질라": "Mechagodzilla", "メカゴジラ": "Mechagodzilla",
+    # ── 고질라 유니버스 조연/빌런 괴수 — 프랜차이즈명(고질라)이 제목에 함께 박혀도
+    #    실제 피규어 주인공이 이쪽이면 collapse 되지 않게 ゴジラ보다 먼저 둔다.
+    #    (예: "Battra Larva ... Godzilla Movie Monster Series" → Battra)
+    "메카니콩": "Mechani-Kong", "mechanikong": "Mechani-Kong",      # 'kong' 포함 → 킹콩보다 먼저
+    "메카고질라": "Mechagodzilla", "メカゴジラ": "Mechagodzilla", "mechagodzilla": "Mechagodzilla",
     "킹기도라": "King Ghidorah", "기도라": "King Ghidorah",
     "キングギドラ": "King Ghidorah", "ギドラ": "King Ghidorah",
-    "스페이스고질라": "Space Godzilla", "スペースゴジラ": "Space Godzilla",
+    "ghidorah": "King Ghidorah", "ghidora": "King Ghidorah",   # 'King Ghidora' 철자변형
+    "kingghidora": "King Ghidorah", "ghidrah": "King Ghidorah",
+    "스페이스고질라": "Space Godzilla", "スペースゴジラ": "Space Godzilla", "spacegodzilla": "Space Godzilla",
+    "고질라주니어": "Godzilla Junior", "godzillajr": "Godzilla Junior", "ゴジラジュニア": "Godzilla Junior",
+    "리틀고질라": "Little Godzilla", "littlegodzilla": "Little Godzilla", "リトルゴジラ": "Little Godzilla",
+    "미니라": "Minilla", "minilla": "Minilla", "ミニラ": "Minilla", "minya": "Minilla",
+    "바트라": "Battra", "밧트라": "Battra", "배트라": "Battra", "battra": "Battra", "バトラ": "Battra",
+    "데스토로이아": "Destoroyah", "데스토로이야": "Destoroyah", "destoroyah": "Destoroyah",
+    "destroyah": "Destoroyah", "デストロイア": "Destoroyah",
+    "디스트로이어": "Destoroyah", "디스트로이아": "Destoroyah",   # Destroyer 음차 변형
+    "비오란테": "Biollante", "biollante": "Biollante", "ビオランテ": "Biollante",
+    "앙기라스": "Anguirus", "안기라스": "Anguirus", "anguirus": "Anguirus", "アンギラス": "Anguirus",
+    "헤도라": "Hedorah", "hedorah": "Hedorah", "ヘドラ": "Hedorah",
+    "가이간": "Gigan", "gigan": "Gigan", "ガイガン": "Gigan",
+    "메가로": "Megalon", "메가론": "Megalon", "megalon": "Megalon", "メガロ": "Megalon",
+    "에비라": "Ebirah", "ebirah": "Ebirah", "エビラ": "Ebirah",
+    "바라곤": "Baragon", "baragon": "Baragon", "バラゴン": "Baragon",
+    "라돈": "Rodan", "로단": "Rodan", "rodan": "Rodan", "ラドン": "Rodan",
+    "제트재규어": "Jet Jaguar", "jetjaguar": "Jet Jaguar", "ジェットジャガー": "Jet Jaguar",
+    "킹콩": "King Kong", "kingkong": "King Kong", "コング": "King Kong", "kong": "King Kong",
     "고질라": "Godzilla", "godzilla": "Godzilla", "ゴジラ": "Godzilla", "고지라": "Godzilla",
     "울트라맨": "Ultraman", "ultraman": "Ultraman", "ウルトラマン": "Ultraman",
+    # ── 가메라 유니버스 조연/빌런 — 가메라보다 먼저 ──
+    "갸오스": "Gyaos", "gyaos": "Gyaos", "ギャオス": "Gyaos",
+    "바루곤": "Barugon", "barugon": "Barugon", "バルゴン": "Barugon",
+    "기롱": "Guiron", "guiron": "Guiron", "ギロン": "Guiron",
+    "이리스": "Iris", "irys": "Iris", "イリス": "Iris",
+    "레기온": "Legion", "legion": "Legion", "レギオン": "Legion",
     "가메라": "Gamera", "gamera": "Gamera", "ガメラ": "Gamera",
     "가면라이더": "Kamen Rider", "kamenrider": "Kamen Rider", "仮面ライダー": "Kamen Rider",
     "발탄성인": "Baltan", "발탄": "Baltan", "バルタン": "Baltan",
@@ -71,11 +99,17 @@ GENRE_RULES = [
               "고모라", "레드킹", "데스토로이아", "데스토로이야",
               "괴수8호", "카이주8", "kaiju8", "kaijuno8", "kaijuno.8",
               "그리드맨", "gridman", "다이나제논", "dynazenon", "가규라", "gagula",
+              # 고질라/가메라 조연·빌런 괴수
+              "킹콩", "kingkong", "kong", "바트라", "battra", "갸오스", "gyaos",
+              "비오란테", "biollante", "라돈", "rodan", "앙기라스", "anguirus",
+              "헤도라", "hedorah", "가이간", "gigan", "메가로", "megalon",
+              "바라곤", "baragon", "에비라", "ebirah", "바루곤", "barugon",
+              "고질라주니어", "godzillajr", "미니라", "minilla",
               # 일본어
               "ゴジラ", "怪獣", "ガメラ", "キングギドラ", "ギドラ", "モスラ",
               "メカゴジラ", "バルタン", "ゼットン", "ゴモラ", "レッドキング",
               "グリッドマン", "ダイナゼノン", "ガギュラ", "怪獣8号", "怪獣８号",
-              "東宝", "デストロイア"]),
+              "東宝", "デストロイア", "コング", "バトラ", "ギャオス", "ラドン"]),
     ("공룡", ["공룡", "다이노", "티라노", "dinosaur", "dino", "rex", "tyranno",
               "쥬라기", "jurassic", "트리케라", "恐竜"]),
     ("특촬", ["울트라맨", "ultraman", "가면라이더", "kamenrider", "라이더",

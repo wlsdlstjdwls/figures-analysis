@@ -1,7 +1,33 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-25(11) · **매칭 검수 +3 · grouping 라인변형 분리 정밀화(prune_conflicts)**. 가동 18소스.
+> 최종 업데이트: 2026-06-25(12) · **앵커 다중소스 확장(비교그룹 31→62) + eBay 가동(4,474행)**. 가동 **19소스**.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-25 #12) — ⭐ 앵커 다중소스 확장 (매칭확대 #1a)
+
+### auto_block 다중앵커 일반화 (`normalize/grouping.py`)
+- 진단: 그룹 앵커가 amiami(JP) 단독 → 신규 USD/정가 소스가 amiami와 교차 적어 recall 한계. naver에 **라인마커 매물 1254건** 있는데 amiami 마커앵커(225)에만 붙음.
+- **`ANCHOR_SOURCES`**(우선순위) 신규 = `[amiami, solaris, cmdstore, entearth, bbts, ninoma, toynk, galactictoys, toyshnip, hobbysearch, hlj]`. `auto_block`이 이 순서로 다중앵커 처리.
+  - **중복그룹 방지**: `grouped` set으로 우선순위 높은 앵커가 그룹 생성→나머지 정가소스·국내중고는 멤버 흡수. 낮은 앵커가 이미 멤버면 새 그룹 안 만듦.
+  - **rival 모호성 보정**: 같은 블록의 '다른 제품' 앵커만 rival(같은 제품 중복 정가앵커는 score≥0.8이면 rival 제외) → 중복 정가소스가 후보를 모호처리하는 버그 차단.
+  - **비-amiami 앵커 자격 게이트**: 라인마커 또는 바코드 있을 때만 앵커. (영문 정가소스 무라인 generic 제목이 무라인 국내 generic 매물 대량흡수하는 모호버킷 차단. amiami는 검증카탈로그라 기존 관대함 유지.) — 이 게이트로 auto 594→372.
+- **`_strip_shipdate`/`_years` 수정** — 프리오더 출하/발매 예정연도(예 "Ships 2026", "26년 6월 발매")가 연식매칭 오염시켜 **false merge**(Odo Island 2023 ↔ Godzilla 1975, 공유연도 2026). 출하패턴 연도 제거 → 양쪽 false merge 소멸, 진짜 제품연도(2014 등)는 보존.
+- **`prune_empty_groups`** 신규 — 멤버<2이고 수동/seed 멤버 없는 빈 그룹(다중앵커 재실행시 자격상실로 앵커만 남은 잔존) 청소. `run()`에 편입(prune_conflicts 다음).
+- 검증: auto 370, **product_group 62**(amiami 50·solaris 5·cmdstore 3·galactictoys 3·ninoma 2·entearth 1), listing_group 485. ⭐ **비교그룹(멤버≥2) 31→62, 교차출처(≥2소스) 43그룹**. 멤버출처 naver272·amiami76·danawa58·bunjang22·yahoo22·solaris12·cmdstore10. 대시보드 15,203건 재생성.
+  - 예: gid51 = solaris↔naver↔danawa S.H.MonsterArts 고질라2014 무비그래픽플러스 동일제품 9건(정확 크로스소스). gid98 = galactictoys 이치방쇼 고질라2023 33건.
+- 🎯 **다음**: ① **1b naver 라인명시 타게팅** — export_review 덤프 1642앵커(다중앵커+eBay로 늘어남) 검수. ② **남은 false merge 근원=extract 캐릭터 collapse**(Gyaos→Gamera, Kong→Godzilla, Godzilla Jr→Godzilla, **Battra→Godzilla** — eBay 빈티지로 더 두드러짐) — `normalize/extract.py` 캐릭터 사전 정밀화(빌런/조연 괴수를 프랜차이즈명으로 collapse 안 하게). ③ 같은 라인 다른 서브괴수(저영향).
+
+### ⭐ extract 캐릭터 collapse 근원수정 (2026-06-25 #12c)
+- 진단: `_match_dict`가 dict 순서상 첫 부분일치 반환 → 조연/빌런 괴수(Battra·King Kong·Gyaos·Godzilla Jr·Destoroyah)가 제목의 프랜차이즈명("Godzilla"/"Gamera") 부분일치로 **collapse** → false merge. eBay 빈티지로 두드러짐.
+- **`extract.py CHARACTERS` 보강**: 고질라/가메라 유니버스 빌런 25+종을 **프랜차이즈명 앞**에 배치(메카니콩/메카고질라/킹기도라/킹콩/바트라/데스토로이아/비오란테/라돈/앙기라스/헤도라/가이간/메가로/바라곤/에비라/고질라주니어/미니라/갸오스/바루곤/기롱/레기온…). 한·영·일 변형 + 철자변형(`ghidora`/`kingghidora` h없음, `디스트로이어` Destroyer음차). GENRE 괴수에도 추가(단독 빌런 제목도 괴수 분류). ⚠️ 'iris'는 일반단어라 'irys'만 등록(Gamera Iris는 Gamera 유지, 희소·저영향).
+- **`grouping.py` 보강 3종**: ① `refresh_group_fields` — product_group denorm(character/maker/line/year/canonical)을 현재 앵커 기준 갱신(stale 라벨 'Godzilla'→실제 'Mechagodzilla' 등, 대시보드 헤더가 이 값 씀). ② `prune_char_mismatch` — 앵커와 live character 다른 seed/auto 멤버 제거(manual·anchor 보존, listing_group·product_match 양쪽). 옛 seed stray(Godzilla 2023 그룹의 char=Megalon '고질라샵 한정 메가로') 청소. ③ run()에 편입(prune_conflicts→prune_char_mismatch→refresh→prune_empty).
+- 검증: `renormalize`(3,662행 재분류) → `group`. **혼합 char 그룹 0**(전엔 5), auto:blocking 393→439, **비교그룹 62→67, 교차출처 43→52**. 빌런이 자기 cross-source 그룹 형성(예 Mechagodzilla 2002 23멤버, Destoroyah, King Ghidorah). 대시보드 19,677건. 🎯 **#3 옛 seed 노이즈 대부분 prune_char_mismatch로 자동청소됨**(잔여=같은 char 내 라인변형은 prune_conflicts 담당).
+
+### ⭐ eBay 가동 (2026-06-25 #12b)
+- 사용자가 Production keyset 발급 → `.env`에 `EBAY_APP_ID`(App ID/Client ID) + `EBAY_CERT_ID`(Cert ID/Client Secret) 적용. Dev ID는 코드 미사용. OAuth client-credentials(base64 APP:CERT→token)→Browse API. 토큰발급·수집 검증 OK.
+- `run.py ebay` → **4,474행**(7쿼리, USD 전부 price_krw 환산), is_sold=0(Browse=활성호가만, sold는 Marketplace Insights 비즈니스승인 게이트=개인불가). genre 괴수3119·특촬607·기타659. char/maker ~3000. condition 다국어 혼재(Used/New + Usato/Neuf/Occasion=IT/FR eBay). **빈티지 괴수(Bullmark/Marusan/M1/소프비) 풍부** = 기존소스에 없던 표본.
+- 묶음토큰 영문 보강(`BUNDLE_TOKENS`: lotof/setof/bundle/joblot — "Lot of 5" 등 차단). group 재실행 → eBay 21건 그룹합류(MMS 고질라 연식별 매칭). 대시보드 15,203→**19,677건**. eBay는 USED_SOURCES 아님(해외호가)이라 product_match 미편입(국내 premium 무오염, 비교UI 그룹에만 노출).
+- ⚠️ eBay 수집량 큼(5,516수집→4,474 latest) + Browse 무료 ~5,000/일 한도 → daily 편입 시 한도주의. 현재 수동(`run.py ebay`). 자동화는 weekly 권장.
 
 ## 이번 세션 변경 (2026-06-25 #11) — 매칭 검수 확대 + grouping 정밀화
 
@@ -222,7 +248,7 @@
 | CMD Store | `run.py cmdstore` | Shopify suggest+detail JSON | **미국 새제품 정가**(USD) 121행, 괴수/특촬 풍부 | weekly |
 | Ninoma | `run.py ninoma` | Shopify suggest+detail JSON | **필리핀 새제품 호가**(PHP) 138행 | weekly |
 | 라쿠텐 | `run.py rakuten` | 공식 Ichiba API | **일본 신품/중고 호가**(JPY) | ⏸ **보류**(일본폰 인증 필요) |
-| eBay | `run.py ebay` | 공식 API | 해외 호가 | ⏸ **키 발급 대기중** |
+| eBay | `run.py ebay` | 공식 Browse API | **해외 호가**(USD) 4,474행, 빈티지 괴수 풍부 | ✅ **가동**(키 적용 2026-06-25) |
 
 **자동화 (Windows 작업 스케줄러)**:
 - `FiguresAnalysisDaily` 09:00 + `FiguresAnalysis_Daily` 20:00 — `run.py daily`(호가/실거래: naver+wyyyes+bunjang+yahoo→리포트→HTML)
