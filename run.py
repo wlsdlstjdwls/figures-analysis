@@ -37,6 +37,13 @@ import sys
 
 
 def main():
+    # Windows 콘솔(cp949)에서 한글/nbsp 등 출력 시 UnicodeEncodeError 방지
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
 
     if cmd == "init":

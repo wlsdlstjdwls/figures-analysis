@@ -125,7 +125,9 @@ def build(today=None):
 
     df["sdate"] = df["source_date"].map(lambda v: str(v)[:10] if pd.notna(v) else None)
     # 제목에 박힌 연식 추출 (예: 고질라(1989)) — 빈티지/원형 연도 식별
-    df["year"] = df["title_raw"].str.extract(r"(19[5-9]\d|20[0-2]\d)", expand=False)
+    # 숫자경계로 감싸 품번/롱넘버 속 4자리 오매칭 방지(예 "FIGURE12019"), 상한 2026.
+    df["year"] = df["title_raw"].str.extract(
+        r"(?<!\d)(19[5-9]\d|20[0-2][0-6])(?!\d)", expand=False)
     df["cond_ko"] = df["condition"].map(lambda v: COND_KO.get(v) if pd.notna(v) else None)
     df["desc"] = df["description"].map(lambda v: str(v)[:120] if pd.notna(v) else None)
 
@@ -145,13 +147,17 @@ def build(today=None):
     _gids = [key2gid.get((s, i)) for s, i in zip(df["source"], df["source_item_id"])]
     df["gid"] = [str(g) if (g is not None and str(g) in groups) else None for g in _gids]
 
-    listings = (df[["price_krw", "source", "source_ko", "mall_name", "genre", "character_ko",
-                    "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate",
-                    "cond_ko", "desc", "year", "datelabel", "gid"]]
-                .sort_values("price_krw", ascending=False)
-                .rename(columns={"character_ko": "character", "maker_ko": "maker"}))
-    listings["price_krw"] = listings["price_krw"].astype(int)
-    listings["title_raw"] = listings["title_raw"].str.slice(0, 90)
+    # 경량화: 짧은 키 + 파생필드(source_ko/status_ko/cond_ko) 제거 → JS에서 복원.
+    #   키가 매물 19k건마다 반복되므로 키 축약이 파일크기 최대 절감 레버.
+    _keep = {"price_krw": "p", "source": "s", "mall_name": "m", "genre": "g",
+             "character_ko": "c", "maker_ko": "k", "title_raw": "t", "url": "u",
+             "image_url": "i", "sdate": "d", "year": "y", "datelabel": "l",
+             "gid": "gid", "is_sold": "so", "condition": "co", "desc": "de"}
+    listings = (df[list(_keep)].rename(columns=_keep)
+                .sort_values("p", ascending=False))
+    listings["p"] = listings["p"].astype(int)
+    listings["so"] = listings["so"].fillna(0).astype(int)
+    listings["t"] = listings["t"].str.slice(0, 90)
 
     genres = [g for g in df["genre"].dropna().unique().tolist()]
     sources = sorted(df["source_ko"].dropna().unique().tolist())
@@ -508,6 +514,30 @@ const D = __DATA__;
 const won = n => (n==null||isNaN(n)) ? "" : Number(n).toLocaleString("ko-KR");
 const esc = s => (s==null?"":(""+s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
+// 한글 라벨 맵 (파이썬 SOURCE_KO/COND_KO/CHAR_KO/MAKER_KO 미러)
+const SOURCE_KO={naver:"네이버쇼핑",ebay:"이베이",wyyyes:"와이스",bunjang:"번개장터",
+  joongna:"중고나라",danggn:"당근마켓",amiami:"아미아미",yahoo_jp:"야후옥션JP",hlj:"HLJ",
+  bbts:"BBTS",suruga:"스루가야",rakuten:"라쿠텐",danawa:"다나와",hobbysearch:"하비서치",
+  entearth:"EE",solaris:"솔라리스재팬",toynk:"토잉크",cmdstore:"CMD스토어",ninoma:"니노마",
+  galactictoys:"갤럭틱토이즈",toyshnip:"토이쉬닙"};
+const COND_KO={used_sealed:"미개봉",used_open:"개봉",used:"중고",new:"새상품",prize:"프라이즈"};
+const CHAR_KO={Godzilla:"고질라",Ultraman:"울트라맨","Kamen Rider":"가면라이더",Dinosaur:"공룡",
+  Jurassic:"쥬라기",Gamera:"가메라","King Ghidorah":"킹기도라",Tyrannosaurus:"티라노",
+  Baltan:"바루탄",Mothra:"모스라",Rodan:"라돈",Mechagodzilla:"메카고질라"};
+const MAKER_KO={Bandai:"반다이",Banpresto:"반프레스토",TakaraTomy:"타카라토미",Ensky:"엔스카이",
+  Kaiyodo:"카이요도",Medicom:"메디콤",Bullmark:"불마크",Yutaka:"유타카",Marmit:"마미트",
+  Marusan:"마루산",Popy:"포피","X-Plus":"엑스플러스",M1go:"M1고"};
+
+// 경량 레코드(짧은 키) → 기존 코드 호환 위해 긴 키·파생필드 복원
+(D.listings||[]).forEach(r=>{
+  r.price_krw=r.p; r.source=r.s; r.mall_name=r.m; r.genre=r.g;
+  r.character=r.c; r.maker=r.k; r.title_raw=r.t; r.url=r.u;
+  r.image_url=r.i; r.sdate=r.d; r.year=r.y; r.datelabel=r.l; r.desc=r.de;
+  r.source_ko=SOURCE_KO[r.s]||r.s;
+  r.status_ko=r.so?"실거래":"호가";
+  r.cond_ko=COND_KO[r.co]||null;
+});
+
 (function(){
   const sub=document.getElementById("sub");
   sub.className="subpill";
@@ -614,12 +644,15 @@ const cmpBack=document.getElementById("cmpBack");
 const BUCKET_ORDER=["새상품","미개봉","개봉","중고","프라이즈","기타"];
 function openCmp(gid){
   const g=D.groups[gid]; if(!g) return;
-  document.getElementById("cmpTitle").textContent = g.label || "시세 비교";
+  const charKo=CHAR_KO[g.character]||g.character||"";
+  const makKo=MAKER_KO[g.maker]||g.maker||"";
+  const titleKo=[charKo,g.line,g.year].filter(Boolean).join(" ");
+  document.getElementById("cmpTitle").textContent = titleKo || g.label || "시세 비교";
   const prices=g.members.map(m=>m.price_krw).filter(x=>x!=null);
   let html="";
   html+=`<div class="cmphd">`
       + (g.img?`<img referrerpolicy="no-referrer" src="${esc(g.img)}" onerror="this.style.display='none'">`:"")
-      + `<div class="ci">${[g.character,g.maker,g.line,g.year].filter(Boolean).map(esc).join(" · ")||""}`
+      + `<div class="ci">${[charKo,makKo,g.line,g.year].filter(Boolean).map(esc).join(" · ")||""}`
       + (prices.length?`<br>최저 <b class="cmplo">${won(Math.min(...prices))}</b> ~ 최고 <b class="cmphi2">${won(Math.max(...prices))}</b>원 · 매물 ${g.members.length}곳`:"")
       + `</div></div>`;
   const buckets={};
