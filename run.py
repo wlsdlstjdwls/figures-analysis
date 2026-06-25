@@ -17,6 +17,10 @@
   python run.py entearth  # Entertainment Earth 수집 (미국 새제품 정가, FlareSolverr)
   python run.py solaris   # Solaris Japan 수집 (일본 피규어 새제품 정가+중고 호가 USD, requests)
   python run.py toynk     # Toynk 수집 (미국 새제품 정가 USD, requests)
+  python run.py cmdstore  # CMD Store 수집 (미국 새제품 정가 USD, requests)
+  python run.py ninoma    # Ninoma 수집 (필리핀 새제품 호가 PHP, requests)
+  python run.py galactictoys # Galactic Toys 수집 (미국 새제품 정가 USD, requests, ⭐괴수풍부)
+  python run.py toyshnip  # Toyshnip 수집 (미국 일본직수입 새제품 정가 USD, requests)
   python run.py analyze   # 분석 출력
   python run.py match     # 교차언어 상품 매칭 후보 덤프 (판정은 Claude Code가 대화로)
   python run.py group     # 상품그룹 매칭 (이관+자동블로킹+검수덤프+product_match 역생성)
@@ -86,6 +90,18 @@ def main():
     elif cmd == "toynk":
         from collectors.scrape.toynk import collect
         collect()
+    elif cmd == "cmdstore":
+        from collectors.scrape.cmdstore import collect
+        collect()
+    elif cmd == "ninoma":
+        from collectors.scrape.ninoma import collect
+        collect()
+    elif cmd == "galactictoys":
+        from collectors.scrape.galactictoys import collect
+        collect()
+    elif cmd == "toyshnip":
+        from collectors.scrape.toyshnip import collect
+        collect()
     elif cmd == "analyze":
         from analysis.price import run
         run()
@@ -150,6 +166,10 @@ def main():
         from collectors.scrape.entearth import collect as collect_ee
         from collectors.scrape.solaris import collect as collect_solaris
         from collectors.scrape.toynk import collect as collect_toynk
+        from collectors.scrape.cmdstore import collect as collect_cmd
+        from collectors.scrape.ninoma import collect as collect_ninoma
+        from collectors.scrape.galactictoys import collect as collect_galactic
+        from collectors.scrape.toyshnip import collect as collect_toyshnip
         from collectors.api.rakuten import collect as collect_rakuten
         from report.html_report import build as build_html
         init_db()
@@ -161,6 +181,8 @@ def main():
                          ("bbts", collect_bbts), ("suruga", collect_suruga),
                          ("hobbysearch", collect_hs), ("entearth", collect_ee),
                          ("solaris", collect_solaris), ("toynk", collect_toynk),
+                         ("cmdstore", collect_cmd), ("ninoma", collect_ninoma),
+                         ("galactictoys", collect_galactic), ("toyshnip", collect_toyshnip),
                          ("rakuten", collect_rakuten)):
             try:
                 fn()

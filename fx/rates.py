@@ -23,7 +23,7 @@ def update_fx(today: str | None = None):
     if today is None:
         today = datetime.date.today().isoformat()
     conn = get_conn()
-    for base in ("USD", "JPY"):
+    for base in ("USD", "JPY", "PHP"):
         rate = fetch_rate(base)
         conn.execute(
             "INSERT OR REPLACE INTO fx_rate(date, base, quote, rate) VALUES (?,?,?,?)",

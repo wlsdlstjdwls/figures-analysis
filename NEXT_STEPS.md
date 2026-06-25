@@ -1,7 +1,40 @@
 # 다음 작업 / 세션 인계 문서
 
-> 최종 업데이트: 2026-06-25(8) · **검수 패스 매칭 확대**(`assign_to_group` 헬퍼 + 수동 8건). 가동 14소스.
+> 최종 업데이트: 2026-06-25(10) · **사이트 +2 (Galactic Toys·Toyshnip, Shopify JSON USD)**. 가동 **18소스**.
 > 새 세션에서 이 파일부터 읽으면 이어서 작업 가능. 전체 설계는 [PLAN.md](PLAN.md).
+
+## 이번 세션 변경 (2026-06-25 #10) — 사이트 확장 (Galactic Toys + Toyshnip, Shopify JSON USD)
+
+### ⭐ 신규 소스 2종 (Shopify suggest+detail JSON, 평범 requests — cmdstore와 동형)
+- 정찰: ~90개 토이몰 2차 batch probe(scratchpad `probe.py`/`insp.py`). 대부분 ERR/403/Magento/NOTJSON. 적중 5곳 중 ninoma(기존)·luckypenny(잡토이·ultraman0 탈락)·fugitivetoys(Funko/핀/블박 junk, figure 1/43·이상가격 탈락) 제외, **galactictoys·toyshnip 2곳 채택**.
+- **Galactic Toys**(`run.py galactictoys`, `collectors/scrape/galactictoys.py`): 미국 토이몰(USD). ⭐ **괴수/특촬 풍부** — Ichibansho·S.H.MonsterArts·Movie Monster Series·Tamashii. 필터 product_type ∈ {Figures, Character Models, Plush Figure, Mecha Girl Models} + "figure" 포함. ⚠️ 노이즈 제외=Labubu/Warhammer/Mecha Models(건프라). vendor=**단일 깔끔 메이커**(콤마조인 아님). condition=new.
+  - 결과: **37행**(60상품), 전부 price_krw, noise 0. 괴수12·특촬9·기타16(에반게리온 등). maker 깔끔(Bandai/Tamashii/Ichibansho). USD $3.95~339.95(avg $70).
+- **Toyshnip**(`run.py toyshnip`, `collectors/scrape/toyshnip.py`): 미국 소재 일본 직수입몰(USD). Hiya·Bandai·McFarlane·Funko. 필터 "figure" 포함(Action Figure/Action & Toy Figures), "Toys & Games" 제외. vendor=단일 메이커. condition=new.
+  - 결과: **89행**(52상품), 전부 price_krw, noise 0. 괴수30·특촬9·기타50. ⚠️ **기타50 높음**=Funko POP·McFarlane·Hot Wheels 혼입(저도메인이나 is_noise 아님·UI장르필터로 흡수). USD $9.67~114.99(avg $28).
+- 배선: 각 단독 명령 + **weekly 편입**(…cmdstore/ninoma/**galactictoys/toyshnip**/rakuten). 대시보드 SOURCE_KO/COLOR: galactictoys(보라#7c3aed)·toyshnip(청록#0891b2). `run.py group` 재실행(product_group 31/listing_group 227 유지) → `run.py html` 재생성(**15,176건**).
+- 🎯 다음: **코드만 가능한 괴수 Shopify 신규소스 사실상 소진**(~90곳 probe, 위 2곳이 마지막 알짜). 남은 건 전부 인프라(만다라케/메루카리)·키(eBay)·JP인증(라쿠텐/야후쇼핑). 추가 가치는 **매칭확대(검수)+grouping정밀(라인변형 분리)** 쪽.
+
+## 이번 세션 변경 (2026-06-25 #9b) — ⭐ 비교 UI 완성 (사용자 핵심요구)
+
+### 카드 클릭 → 같은 제품 매물 새/중고·출처별 시세비교 모달
+- `report/html_report.py`: **`_build_groups(df)`** 신규 — `product_group`+`listing_group` 조인 → `D.groups[gid]={label,character,maker,line,year,img,members[]}`. 멤버는 **최신 스냅샷(df)에 있는 매물만**, 멤버 2개 미만 그룹 제외. 카드별 `gid`(문자열) 주입.
+  - ⚠️ 함정: `[int|None]` 리스트를 pandas 컬럼화하면 **float64 강제캐스팅(1→1.0)** → `str(1.0)="1.0"≠그룹키"1"`. **리스트 컴프리헨션으로 str gid 직접 생성**(컬럼 .map 금지)으로 해결. 결과 227카드에 gid 적재.
+- 카드에 **🔍 시세비교 N곳** 버튼(그룹 있을 때만). 클릭 → 모달: 헤더(이미지+캐릭터/메이커/라인/연식 + 최저~최고가) + **새상품/중고/프라이즈 버킷별** 매물 행(출처색뱃지·제목·실거래/호가·가격, 클릭→원본). 앵커 네비 막기 = grid 이벤트위임 `preventDefault`.
+- 결과: 31그룹 노출(멤버 2~82). 새↔중고·amiami↔yahoo_jp↔bunjang↔naver↔danawa 교차 시세 한 화면. `run.py html` 재생성(15,044건).
+- ⚠️ **잔여 데이터품질**: group#21(MMS 고질라2023)이 auto:blocking으로 82멤버(naver49·danawa29) — 동일 제품군이나 변형(Minus Color/일반) 혼재 가능. UI는 정상, **grouping 정밀도(라인변형 분리)는 후속**.
+
+## 이번 세션 변경 (2026-06-25 #9) — 사이트 확장 (CMD Store + Ninoma, Shopify JSON)
+
+### ⭐ 신규 소스 2종 (Shopify suggest+detail JSON, 평범 requests — solaris/toynk와 동형)
+- 정찰: 다수 토이몰 `/search/suggest.json` 배치 probe(scratchpad `probe.py`). kidrobot(아트토이=괴수무관)·luckypenny(잡토이)·plazajapan(404=Magento)·hobbygenki(403)·entearth/otakurepublic(403) 탈락. **cmdstore·ninoma 2곳 적중**.
+- **CMD Store**(`run.py cmdstore`, `collectors/scrape/cmdstore.py`): 미국 토이몰(USD). ⭐ **괴수/특촬 액션피규어 풍부** — S.H.MonsterArts·Figuarts·MMS·Hiya·X-Plus·NECA. BBTS/EE/Toynk 보완.
+  - 필터 `product_type`에 "figure" 포함(Action/Statue/Static Figure). ⚠️ vendor 필드가 **콤마조인 태그열**("Movie,...,Hiya Toys") → **메이커=마지막 세그먼트**(`_maker`). condition=new 고정.
+  - 결과: **121행**(122상품), 전부 price_krw, noise 0. 괴수69·특촬19·공룡7·괴물3·기타23. maker 깔끔(Tamashii Nations/Banpresto/NECA/Diamond). USD 6.99~319.99(avg $63).
+- **Ninoma**(`run.py ninoma`, `collectors/scrape/ninoma.py`): 필리핀 정품 일본피규어몰(**PHP**). Bandai MMS·이치방쿠지·Figuarts. 동남아 리테일 호가 표본. vendor=**메이커 깔끔**(Bandai/Banpresto/CCP/GSC), SKU=JAN바코드.
+  - 필터 `product_type=="Figure"`(Model Kits/Plush/Board Game 제외). condition=new. ⚠️ **PHP 신규통화** → `fx/rates.py` base 튜플에 **PHP 추가**(1 PHP≈25 KRW). 이치방쿠지 등 애니 프라이즈 혼입(기타40, 무해).
+  - 결과: **138행**, 전부 price_krw, noise 0. 괴수60·특촬29·괴물7·공룡2·기타40.
+- 배선: 각 단독 명령 + **weekly 편입**(…solaris/toynk/**cmdstore/ninoma**/rakuten). 대시보드 SOURCE_KO/COLOR: cmdstore(하늘#0ea5e9)·ninoma(분홍#db2777). `run.py group` 재실행(자동블로킹 144건, listing_group 221→**227**) → `run.py html` 재생성(**15,044건**).
+- 🎯 다음: 코드만 가능한 Shopify 신규소스 다시 소진(probe 결과 대부분 403/Magento/비괴수). 남은 건 인프라(만다라케/메루카리)·키(eBay)·JP인증(라쿠텐/야후쇼핑). **비교 UI는 #9b에서 완성.**
 
 ## 이번 세션 변경 (2026-06-25 #8) — 검수 패스 매칭 확대 (NEXT_STEPS #1 착수)
 
@@ -172,6 +205,8 @@
 | Entertainment Earth | `run.py entearth` | FlareSolverr(CF) + data-* | **미국 새제품 정가**(USD) 301행 | weekly(FlareSolverr) |
 | Solaris Japan | `run.py solaris` | Shopify suggest+detail JSON | **일본 피규어 새제품 정가+중고 호가**(USD) 193행 | weekly |
 | Toynk | `run.py toynk` | Shopify suggest+detail JSON | **미국 새제품 정가**(USD) 37행 | weekly |
+| CMD Store | `run.py cmdstore` | Shopify suggest+detail JSON | **미국 새제품 정가**(USD) 121행, 괴수/특촬 풍부 | weekly |
+| Ninoma | `run.py ninoma` | Shopify suggest+detail JSON | **필리핀 새제품 호가**(PHP) 138행 | weekly |
 | 라쿠텐 | `run.py rakuten` | 공식 Ichiba API | **일본 신품/중고 호가**(JPY) | ⏸ **보류**(일본폰 인증 필요) |
 | eBay | `run.py ebay` | 공식 API | 해외 호가 | ⏸ **키 발급 대기중** |
 

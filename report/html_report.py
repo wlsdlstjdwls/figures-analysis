@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from analysis.premium import compute_premium, compute_product_premium, JP_USED
-from storage.db import load_latest_df
+from storage.db import load_latest_df, get_conn
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "reports"
@@ -24,7 +24,8 @@ SOURCE_KO = {"naver": "네이버쇼핑", "ebay": "이베이", "wyyyes": "와이�
              "amiami": "아미아미", "yahoo_jp": "야후옥션JP", "hlj": "HLJ", "bbts": "BBTS",
              "suruga": "스루가야", "rakuten": "라쿠텐", "danawa": "다나와",
              "hobbysearch": "하비서치", "entearth": "EE", "solaris": "솔라리스재팬",
-             "toynk": "토잉크"}
+             "toynk": "토잉크", "cmdstore": "CMD스토어", "ninoma": "니노마",
+             "galactictoys": "갤럭틱토이즈", "toyshnip": "토이쉬닙"}
 CHAR_KO = {
     "Godzilla": "고질라", "Ultraman": "울트라맨", "Kamen Rider": "가면라이더",
     "Dinosaur": "공룡", "Jurassic": "쥬라기", "Gamera": "가메라",
@@ -45,6 +46,68 @@ COND_KO = {
 
 def _ko(d, v):
     return d.get(v, v) if pd.notna(v) else None
+
+
+def _bucket(cond):
+    """condition -> 비교 모달 그룹핑 라벨 (새/중고/프라이즈)."""
+    c = (cond or "")
+    if c.startswith("used"):
+        return "중고"
+    if c == "new":
+        return "새상품"
+    return COND_KO.get(c) or "기타"
+
+
+def _build_groups(df):
+    """product_group + listing_group 조인 → 카드 클릭 시세비교용 데이터.
+
+    반환: (groups, key2gid)
+      groups[str(gid)] = {label, character, maker, line, year, img, members:[...]}
+      key2gid[(source, source_item_id)] = gid
+    멤버는 최신 스냅샷(df)에 존재하는 매물만. 멤버 2개 미만 그룹은 제외(비교 의미 없음).
+    """
+    conn = get_conn()
+    pg = {r[0]: r for r in conn.execute(
+        "SELECT id, canonical, character, maker, line, year, anchor_source, anchor_item_id "
+        "FROM product_group")}
+    lg = conn.execute(
+        "SELECT source, source_item_id, group_id, confidence, method FROM listing_group"
+    ).fetchall()
+    conn.close()
+
+    row_by_key = {(r.source, r.source_item_id): r for r in df.itertuples()}
+    from collections import defaultdict
+    members = defaultdict(list)
+    key2gid = {}
+    for src, iid, gid, conf, method in lg:
+        key2gid[(src, iid)] = gid
+        r = row_by_key.get((src, iid))
+        if r is None:                      # 최신 스냅샷에 없으면(미수집) 비교에서 제외
+            continue
+        cond = r.condition or ""
+        members[gid].append({
+            "source": src,
+            "source_ko": SOURCE_KO.get(src, src),
+            "price_krw": int(r.price_krw) if pd.notna(r.price_krw) else None,
+            "bucket": _bucket(cond),
+            "sold": int(r.is_sold) if pd.notna(r.is_sold) else 0,
+            "url": r.url,
+            "title": (r.title_raw or "")[:80],
+        })
+
+    groups = {}
+    for gid, g in pg.items():
+        mem = members.get(gid, [])
+        if len(mem) < 2:
+            continue
+        anchor = row_by_key.get((g[6], g[7]))
+        img = anchor.image_url if (anchor is not None and pd.notna(anchor.image_url)) else None
+        mem.sort(key=lambda m: (m["price_krw"] is None, m["price_krw"] or 0))
+        groups[str(gid)] = {
+            "label": g[1], "character": g[2], "maker": g[3],
+            "line": g[4], "year": g[5], "img": img, "members": mem,
+        }
+    return groups, key2gid
 
 
 def build(today=None):
@@ -76,9 +139,15 @@ def build(today=None):
             return "거래" if sold == 1 else "마감"
         return ""
     df["datelabel"] = df.apply(_datelabel, axis=1)
+
+    # 상품그룹(시세비교 모달용) + 카드별 그룹 id (문자열 gid, 멤버 2개 미만 그룹은 None)
+    groups, key2gid = _build_groups(df)
+    _gids = [key2gid.get((s, i)) for s, i in zip(df["source"], df["source_item_id"])]
+    df["gid"] = [str(g) if (g is not None and str(g) in groups) else None for g in _gids]
+
     listings = (df[["price_krw", "source", "source_ko", "mall_name", "genre", "character_ko",
                     "maker_ko", "status_ko", "title_raw", "url", "image_url", "sdate",
-                    "cond_ko", "desc", "year", "datelabel"]]
+                    "cond_ko", "desc", "year", "datelabel", "gid"]]
                 .sort_values("price_krw", ascending=False)
                 .rename(columns={"character_ko": "character", "maker_ko": "maker"}))
     listings["price_krw"] = listings["price_krw"].astype(int)
@@ -123,6 +192,7 @@ def build(today=None):
         "premium": premium,
         "pricing": pricing,
         "price_policy": {"fast": FAST_MULT, "top": TOP_MULT},
+        "groups": groups,
         "listings": listings.to_dict(orient="records"),
     }
 
@@ -327,6 +397,26 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .mbtn.primary:hover { filter:brightness(1.08); }
   body.modal-open { overflow:hidden; }
 
+  /* ── 시세비교 (카드→그룹멤버 모달) ── */
+  .cmpbtn { display:inline-flex; align-items:center; gap:4px; align-self:flex-start;
+            font-size:11px; font-weight:700; color:var(--acc); cursor:pointer;
+            background:rgba(91,141,239,.12); border:1px solid rgba(91,141,239,.32);
+            padding:4px 9px; border-radius:7px; transition:background-color .1s; }
+  .cmpbtn:hover { background:rgba(91,141,239,.26); }
+  .cmpsum { font-size:12.5px; color:var(--mut); padding:10px 0 2px; font-variant-numeric:tabular-nums; }
+  .cmpsum b { color:var(--txt); font-weight:700; }
+  .cmprow { display:flex; align-items:center; gap:8px; padding:9px 0; text-decoration:none;
+            color:inherit; border-top:1px solid var(--line); }
+  .cmprow:hover { background:rgba(255,255,255,.02); }
+  .cmptitle { flex:1; min-width:0; font-size:12px; color:var(--mut);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cmpprice { font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; flex:none; }
+  .cmpprice small { font-size:10px; color:var(--mut); font-weight:400; }
+  .cmphd { display:flex; gap:12px; align-items:center; padding:6px 0 10px; }
+  .cmphd img { width:54px; height:54px; border-radius:8px; object-fit:cover; background:#0c0e12; flex:none; }
+  .cmphd .ci { font-size:12px; color:var(--mut); line-height:1.5; }
+  .cmplo { color:var(--sold); } .cmphi2 { color:#ef4444; }
+
   /* ── 모바일 ── */
   @media(max-width:640px){
     header { padding:14px 14px; }
@@ -380,6 +470,14 @@ _TEMPLATE = r"""<!DOCTYPE html>
       <button class="mbtn ghost" id="mReset">초기화</button>
       <button class="mbtn primary" id="mApply">결과 보기</button>
     </div>
+  </div>
+</div>
+
+<!-- 시세비교 모달 (카드 클릭 → 같은 제품 매물 새/중고·출처별) -->
+<div class="mback" id="cmpBack" hidden>
+  <div class="msheet" role="dialog" aria-modal="true" aria-label="시세 비교">
+    <div class="mhead"><h3 id="cmpTitle">시세 비교</h3><button class="mx" id="cmpClose" aria-label="닫기">✕</button></div>
+    <div class="mbody" id="cmpBody"></div>
   </div>
 </div>
 
@@ -473,7 +571,8 @@ const SOURCE_COLOR = {"naver":"#03c75a","wyyyes":"#f59e0b","bunjang":"#ff4800",
                       "yahoo_jp":"#ff0033","hlj":"#1f6feb","bbts":"#d62828",
                       "suruga":"#7b2ff7","rakuten":"#bf0000","danawa":"#00aab5",
                       "hobbysearch":"#ff8800","entearth":"#6a3d9a","solaris":"#16a34a",
-                      "toynk":"#eab308"};
+                      "toynk":"#eab308","cmdstore":"#0ea5e9","ninoma":"#db2777",
+                      "galactictoys":"#7c3aed","toyshnip":"#0891b2"};
 const sColor = s => SOURCE_COLOR[s] || "#5b8def";
 
 function card(r){
@@ -493,6 +592,9 @@ function card(r){
   const meta = r.mall_name ? `<div class="meta">🏬 ${esc(r.mall_name)}</div>` : "";
   const desc = r.desc ? `<div class="pdesc">${esc(r.desc)}</div>` : "";
   const titleAttr = r.desc ? ` title="${esc(r.desc)}"` : "";
+  const grp = (r.gid!=null && D.groups[r.gid]) ? D.groups[r.gid] : null;
+  const cmp = grp
+    ? `<span class="cmpbtn" data-gid="${esc(r.gid)}">🔍 시세비교 ${grp.members.length}곳</span>` : "";
   return `<a class="pcard" style="--gc:${gc}" href="${esc(r.url||'#')}" target="_blank" rel="noopener"${titleAttr}>
     ${img}
     <div class="pbody">
@@ -503,8 +605,49 @@ function card(r){
       ${dline}
       ${meta}
       ${desc}
+      ${cmp}
     </div></a>`;
 }
+
+// ── 시세비교 모달 ──
+const cmpBack=document.getElementById("cmpBack");
+const BUCKET_ORDER=["새상품","미개봉","개봉","중고","프라이즈","기타"];
+function openCmp(gid){
+  const g=D.groups[gid]; if(!g) return;
+  document.getElementById("cmpTitle").textContent = g.label || "시세 비교";
+  const prices=g.members.map(m=>m.price_krw).filter(x=>x!=null);
+  let html="";
+  html+=`<div class="cmphd">`
+      + (g.img?`<img referrerpolicy="no-referrer" src="${esc(g.img)}" onerror="this.style.display='none'">`:"")
+      + `<div class="ci">${[g.character,g.maker,g.line,g.year].filter(Boolean).map(esc).join(" · ")||""}`
+      + (prices.length?`<br>최저 <b class="cmplo">${won(Math.min(...prices))}</b> ~ 최고 <b class="cmphi2">${won(Math.max(...prices))}</b>원 · 매물 ${g.members.length}곳`:"")
+      + `</div></div>`;
+  const buckets={};
+  g.members.forEach(m=>{ (buckets[m.bucket]=buckets[m.bucket]||[]).push(m); });
+  BUCKET_ORDER.forEach(b=>{
+    const arr=buckets[b]; if(!arr||!arr.length) return;
+    arr.sort((x,y)=>(x.price_krw||0)-(y.price_krw||0));
+    html+=`<div class="fgroup"><div class="flab">${esc(b)} · ${arr.length}건</div>`
+        + arr.map(m=>`<a class="cmprow" href="${esc(m.url||'#')}" target="_blank" rel="noopener">
+            <span class="sbadge" style="--sc:${sColor(m.source)}">${esc(m.source_ko)}</span>
+            <span class="cmptitle">${esc(m.title)}</span>
+            <span class="badge ${m.sold?'sold':'ask'}">${m.sold?'실거래':'호가'}</span>
+            <span class="cmpprice">${won(m.price_krw)}<small> 원</small></span>
+          </a>`).join("")
+        + `</div>`;
+  });
+  document.getElementById("cmpBody").innerHTML=html;
+  cmpBack.hidden=false; document.body.classList.add("modal-open");
+}
+function closeCmp(){ cmpBack.hidden=true; document.body.classList.remove("modal-open"); }
+document.getElementById("cmpClose").onclick=closeCmp;
+cmpBack.onclick=e=>{ if(e.target===cmpBack) closeCmp(); };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!cmpBack.hidden) closeCmp(); });
+// 카드 내 시세비교 버튼: 앵커 네비게이션 막고 모달 열기 (이벤트 위임)
+document.getElementById("grid").addEventListener("click",e=>{
+  const b=e.target.closest(".cmpbtn"); if(!b) return;
+  e.preventDefault(); e.stopPropagation(); openCmp(b.dataset.gid);
+});
 
 function apply(){
   const term=q.value.trim().toLowerCase();
