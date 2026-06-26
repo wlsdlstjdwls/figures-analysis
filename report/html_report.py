@@ -110,6 +110,23 @@ def _build_groups(df):
     return groups, key2gid
 
 
+def _strip_nulls(records):
+    """경량화: None/NaN/빈문자 값 키를 레코드에서 제거(반복 19k행 → 파일크기 절감).
+    JS 복원 로직이 undefined를 falsy/`!=null`로 안전 처리하므로 무손실."""
+    import math
+    out = []
+    for rec in records:
+        clean = {}
+        for k, v in rec.items():
+            if v is None or v == "":
+                continue
+            if isinstance(v, float) and math.isnan(v):
+                continue
+            clean[k] = v
+        out.append(clean)
+    return out
+
+
 def build(today=None):
     today = today or datetime.date.today().isoformat()
     df = load_latest_df()
@@ -162,6 +179,12 @@ def build(today=None):
     genres = [g for g in df["genre"].dropna().unique().tolist()]
     sources = sorted(df["source_ko"].dropna().unique().tolist())
 
+    # 소스별 마지막 수집일 (신선도 뱃지용). 한글 라벨 키.
+    src_dates = {}
+    if "collected_at" in df.columns:
+        _sd = df.groupby("source")["collected_at"].max()
+        src_dates = {SOURCE_KO.get(k, k): str(v)[:10] for k, v in _sd.items()}
+
     # 프리미엄율: 상품단위(LLM 매칭) 우선 + 캐릭터 세그먼트 근사(참고). 라벨 한글화.
     prod = compute_product_premium(df)
     for r in prod:
@@ -198,8 +221,9 @@ def build(today=None):
         "premium": premium,
         "pricing": pricing,
         "price_policy": {"fast": FAST_MULT, "top": TOP_MULT},
+        "src_dates": src_dates,
         "groups": groups,
-        "listings": listings.to_dict(orient="records"),
+        "listings": _strip_nulls(listings.to_dict(orient="records")),
     }
 
     html = _TEMPLATE.replace("__DATA__", json.dumps(data, ensure_ascii=False))
@@ -241,6 +265,9 @@ _TEMPLATE = r"""<!DOCTYPE html>
                      box-shadow:0 12px 32px rgba(0,0,0,.5); opacity:0; visibility:hidden;
                      transform:translateY(-4px); transition:opacity .12s, transform .12s; }
   .subpill .sp-tip b { color:var(--acc); font-weight:600; }
+  .subpill .sp-fresh { color:var(--mut); line-height:1.9; }
+  .fdot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--fc); margin-right:3px; vertical-align:middle; }
+  .staleflag { color:#f59e0b; font-weight:600; }
   .subpill:hover .sp-tip { opacity:1; visibility:visible; transform:translateY(0); }
   .filters { display:flex; flex-direction:column; gap:10px; margin-top:12px; align-items:stretch; }
   .ftools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
@@ -358,6 +385,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
           color:var(--txt); border-radius:10px; padding:10px 14px; font-size:13px; font-weight:600; cursor:pointer;
           transition:border-color .12s, background-color .12s; }
   .fbtn:hover { border-color:#3a4150; background:#20242d; }
+  .fbtn.on { background:rgba(91,141,239,.18); border-color:var(--acc); color:var(--acc); }
   .fbtn svg { color:var(--mut); }
   .fbadge { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 5px;
             background:var(--acc); color:#fff; border-radius:999px; font-size:11px; font-weight:700; }
@@ -451,6 +479,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
         필터·정렬<span class="fbadge" id="fbadge" hidden></span>
       </button>
+      <button class="fbtn" id="cmpOnlyBtn" title="여러 출처 시세비교 가능한 매물만">🔍 비교가능</button>
       <div class="viewseg" id="viewSeg">
         <button data-v="gallery" title="갤러리">▦</button>
         <button data-v="grid" title="작은 그리드">▪▪▪</button>
@@ -541,13 +570,22 @@ const MAKER_KO={Bandai:"반다이",Banpresto:"반프레스토",TakaraTomy:"타�
 (function(){
   const sub=document.getElementById("sub");
   sub.className="subpill";
+  // 소스별 신선도: 오늘 수집=초록, 그외=경고색. 오래된순 정렬로 stale 먼저.
+  const fresh = Object.entries(D.src_dates||{})
+    .sort((a,b)=>(a[1]<b[1]?-1:1))
+    .map(([s,d])=>{ const ok=d===D.today;
+      return `<span class="fdot" style="--fc:${ok?'#22c55e':'#f59e0b'}"></span>${esc(s)} <b>${esc(d.slice(5))}</b>`;
+    }).join(" · ");
+  const stale = Object.values(D.src_dates||{}).filter(d=>d!==D.today).length;
   sub.innerHTML =
-    `<span class="sp-main">${D.today} · 상품 ${D.total.toLocaleString()}건</span>`
-    + `<span class="sp-tip">실거래 <b>${D.sold.toLocaleString()}</b>건 · 중앙가 <b>${won(D.median_all)}</b>원<br>${esc(D.src_summary)}</span>`;
+    `<span class="sp-main">${D.today} · 상품 ${D.total.toLocaleString()}건`
+    + (stale?` · <span class="staleflag">⚠ ${stale}소스 미갱신</span>`:``) + `</span>`
+    + `<span class="sp-tip">실거래 <b>${D.sold.toLocaleString()}</b>건 · 중앙가 <b>${won(D.median_all)}</b>원`
+    + `<br><span class="sp-fresh">${fresh}</span></span>`;
 })();
 
 // ── 필터 상태 (모달에서 설정) ──
-let srcSel="", statSel="", sortSel="price_desc", genreSel="";
+let srcSel="", statSel="", sortSel="price_desc", genreSel="", cmpOnly=false;
 const SORTS=[["price_desc","💰 높은가격순"],["price_asc","💰 낮은가격순"],["date_desc","📅 최신순"],["date_asc","📅 오래된순"]];
 const STATS=[["","전체"],["실거래","실거래"],["호가","호가"]];
 const SORT_LABEL=Object.fromEntries(SORTS);
@@ -686,7 +724,8 @@ function apply(){
   const term=q.value.trim().toLowerCase();
   filtered = D.listings.filter(r=>
     (!term || (r.title_raw||"").toLowerCase().includes(term) || (r.mall_name||"").toLowerCase().includes(term)) &&
-    (!srcSel || r.source_ko===srcSel) && (!statSel || r.status_ko===statSel) && (!genreSel || r.genre===genreSel));
+    (!srcSel || r.source_ko===srcSel) && (!statSel || r.status_ko===statSel) && (!genreSel || r.genre===genreSel) &&
+    (!cmpOnly || r.gid!=null));
   const s=sortSel;
   filtered.sort((a,b)=>{
     if(s==="price_asc") return a.price_krw-b.price_krw;
@@ -717,6 +756,10 @@ window.addEventListener("scroll",()=>{
 });
 q.oninput=apply;
 
+// ── 비교가능만 토글 ──
+const cmpOnlyBtn=document.getElementById("cmpOnlyBtn");
+cmpOnlyBtn.onclick=()=>{ cmpOnly=!cmpOnly; cmpOnlyBtn.classList.toggle("on",cmpOnly); apply(); };
+
 // ── 필터 모달 열기/닫기 ──
 const mback=document.getElementById("mback");
 function openModal(){ renderModal(); mback.hidden=false; document.body.classList.add("modal-open"); }
@@ -742,8 +785,8 @@ viewSeg.querySelectorAll("button").forEach(b=>b.onclick=()=>setView(b.dataset.v)
 let saved="gallery"; try{ saved=localStorage.getItem("wyv")||"gallery"; }catch(e){}
 setView(saved);
 
-// 섹션 표시 토글 (현재 미사용 → 숨김). 다시 쓰려면 true 로.
-const SHOW_PREMIUM=false, SHOW_PRICING=false;
+// 섹션 표시 토글. 기본 접힘(collapsed) 상태로 노출, 헤더 클릭시 펼침.
+const SHOW_PREMIUM=true, SHOW_PRICING=true;
 
 // ── 프리미엄 섹션 렌더 ──
 (function(){
